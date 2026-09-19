@@ -121,7 +121,32 @@ export default function AdminNotifications({ branch }) {
         notificationData.studentName = selectedStudent.name || ""
       }
 
-      await addDoc(collection(db, "notifications"), notificationData)
+      if (form.targetType === "student") {
+        await addDoc(collection(db, "notifications"), {
+          ...notificationData,
+          studentEmail: String(form.studentEmail).toLowerCase(),
+          targetEmail: null,
+        })
+      } else {
+        const targetStudents = students.filter(
+          (student) => student.email
+        )
+
+        await Promise.all(
+          targetStudents.map((student) =>
+            addDoc(collection(db, "notifications"), {
+              ...notificationData,
+              studentEmail: String(student.email).toLowerCase(),
+              studentId: student.studentId || "",
+              studentFirestoreId: student.firestoreId || "",
+              studentName: student.name || "",
+              className: student.className || "",
+              stream: student.stream || "",
+              targetEmail: null,
+            })
+          )
+        )
+      }
 
       setSuccess(
         form.targetType === "branch"

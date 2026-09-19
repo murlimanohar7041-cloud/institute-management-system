@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore"
 
 import { db } from "../firebase"
+import { sendStudentNotification } from "../utils/notificationService"
 
 function AdminResults({ branch }) {
   const [results, setResults] = useState([])
@@ -240,37 +241,21 @@ function AdminResults({ branch }) {
       )
 
       // ==============================
-      // AUTOMATIC NOTIFICATION
+      // REALTIME STUDENT NOTIFICATION
       // ==============================
 
-      const notificationData = {
+      await sendStudentNotification({
+        studentEmail,
+        studentId: studentGeneratedId,
+        studentFirestoreId: selectedStudent.firestoreId,
+        studentName,
+        branch,
+        className,
+        stream,
         title: "New Result Published",
         message: `Your ${form.exam} result has been published. Percentage: ${percentage}%`,
         type: "Result",
-
-        branch,
-
-        targetType: "student",
-        targetEmail: studentEmail,
-        studentId: studentGeneratedId,
-        studentFirestoreId:
-          selectedStudent.firestoreId,
-        studentName,
-
-        className,
-        stream,
-
-        status: "Published",
-        read: false,
-
-        createdAt: serverTimestamp(),
-        date: new Date().toLocaleDateString(),
-      }
-
-      await addDoc(
-        collection(db, "notifications"),
-        notificationData
-      )
+      })
 
       alert(
         "✅ Result successfully saved!\n\n🔔 Student notification sent."

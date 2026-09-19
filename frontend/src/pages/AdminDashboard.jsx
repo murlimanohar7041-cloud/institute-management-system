@@ -21,12 +21,14 @@ import AdminSettings from "./AdminSettings"
 import AdminStudyMaterials from "./AdminStudyMaterials"
 import AdminStudentLocations from "./AdminStudentLocations"
 import AdminNotifications from "./AdminNotifications"
+import AdminStudentNotifications from "./AdminStudentNotifications"
 import { auth, db } from "../firebase"
 
 export default function AdminDashboard() {
   const [activePage, setActivePage] = useState("Dashboard")
   const [branch, setBranch] = useState("Itimha")
   const [newEnquiries, setNewEnquiries] = useState(0)
+  const [studentNotificationCount, setStudentNotificationCount] = useState(0)
 
   // NEW: Notification popup
   const [showEnquiryNotification, setShowEnquiryNotification] = useState(false)
@@ -34,6 +36,29 @@ export default function AdminDashboard() {
 
   // First Firestore load ko notification banne se rokne ke liye
   const firstLoad = useRef(true)
+
+  // Realtime student -> admin notifications
+  useEffect(() => {
+    const q = query(
+      collection(db, "adminNotifications"),
+      where("branch", "==", branch)
+    )
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const unread = snapshot.docs.filter(
+          (item) => item.data().read !== true
+        ).length
+        setStudentNotificationCount(unread)
+      },
+      (error) => {
+        console.error("Student notification listener error:", error)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [branch])
 
   // New Admission Enquiry count + Notification
   useEffect(() => {
@@ -134,6 +159,7 @@ export default function AdminDashboard() {
     { name: "Certificates", icon: "📜" },
     { name: "Student Locations", icon: "📍" },
     { name: "Send Notification", icon: "🔔" },
+    { name: "Student Notifications", icon: "📨", badge: studentNotificationCount },
     {
       name: "Admission Enquiries",
       icon: "📝",
@@ -171,6 +197,9 @@ export default function AdminDashboard() {
 
     if (activePage === "Send Notification")
       return <AdminNotifications branch={branch} />
+
+    if (activePage === "Student Notifications")
+      return <AdminStudentNotifications branch={branch} />
 
     if (activePage === "Admission Enquiries")
       return <AdminAdmissions branch={branch} />
@@ -356,6 +385,14 @@ export default function AdminDashboard() {
             >
               <span>🔔</span>
               <span>Send Notification</span>
+            </button>
+
+            <button
+              onClick={() => setActivePage("Student Notifications")}
+              style={styles.notificationButton}
+            >
+              <span>📨</span>
+              <span>Student Notifications</span>
             </button>
 
             <button

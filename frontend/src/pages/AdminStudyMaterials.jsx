@@ -10,6 +10,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { sendStudentNotification } from "../utils/notificationService";
 
 export default function AdminStudyMaterials({ branch }) {
   const [materials, setMaterials] = useState([]);
@@ -117,6 +118,38 @@ export default function AdminStudyMaterials({ branch }) {
         status: "Published",
         createdAt: serverTimestamp(),
       });
+
+      const targetStudents = (await getDocs(
+        query(
+          collection(db, "students"),
+          where("branch", "==", branch),
+          where("status", "==", "approved")
+        )
+      )).docs
+        .map((item) => ({ firestoreId: item.id, ...item.data() }))
+        .filter((student) =>
+          student.className === form.className &&
+          (!form.stream || student.stream === form.stream)
+        );
+
+      await Promise.all(
+        targetStudents
+          .filter((student) => student.email)
+          .map((student) =>
+            sendStudentNotification({
+              studentEmail: student.email,
+              studentId: student.studentId || "",
+              studentFirestoreId: student.firestoreId,
+              studentName: student.name || "",
+              branch,
+              className: student.className || "",
+              stream: student.stream || "",
+              title: "New Study Material",
+              message: `${form.title.trim()} study material available hai.`,
+              type: "Study Material",
+            })
+          )
+      );
 
       alert("Study material successfully publish ho gaya. ✅");
 

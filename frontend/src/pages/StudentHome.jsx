@@ -4,6 +4,7 @@ import {
   collection,
   getDocs,
   query,
+  onSnapshot,
   where,
   addDoc,
   updateDoc,
@@ -15,6 +16,7 @@ import { auth, db } from "../firebase"
 import { QRCodeSVG } from "qrcode.react"
 import { getApp } from "firebase/app"
 import { getStorage, ref, getBlob } from "firebase/storage"
+import { sendAdminNotification } from "../utils/notificationService"
 
 
 function StudentHome() {
@@ -59,7 +61,6 @@ function StudentHome() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true)
   const audioContextRef = useRef(null)
-  const notificationTimerRef = useRef(null)
 
 
   useEffect(() => {
@@ -263,10 +264,25 @@ function StudentHome() {
             updatedAt: serverTimestamp(),
           }
 
+          const isFirstLocationUpdate = lastLocationSaveRef.current === 0
+
           await updateDoc(doc(db, "students", student.id), {
             lastLocation: locationData,
             locationSharing: true,
           })
+
+          if (isFirstLocationUpdate) {
+            await sendAdminNotification({
+              studentEmail: student.email,
+              studentId: student.studentId || "",
+              studentFirestoreId: student.id,
+              studentName: student.name || "",
+              branch: student.branch || "",
+              title: "Student Location Sharing Started",
+              message: `${student.name || "Student"} ne live location sharing start ki hai.`,
+              type: "Location",
+            })
+          }
 
           lastLocationSaveRef.current = now
 
@@ -364,6 +380,17 @@ function StudentHome() {
         status: "Pending Verification",
         date: new Date().toISOString(),
         createdAt: serverTimestamp(),
+      })
+
+      await sendAdminNotification({
+        studentEmail: student.email,
+        studentId: student.studentId || "",
+        studentFirestoreId: student.id || "",
+        studentName: student.name || "",
+        branch: student.branch || "",
+        title: "New Payment Submitted",
+        message: `${student.name || "Student"} ne ₹${Number(paymentAmount)} ka payment submit kiya hai. UTR: ${utr.trim()}`,
+        type: "Payment",
       })
 
       setPaymentMessage(
@@ -686,6 +713,18 @@ function StudentHome() {
       setProfileSaving(true)
       setProfileMessage("")
       await updateDoc(doc(db, "students", student.id), { name, fatherName, mobile })
+
+      await sendAdminNotification({
+        studentEmail: student.email,
+        studentId: student.studentId || "",
+        studentFirestoreId: student.id,
+        studentName: name,
+        branch: student.branch || "",
+        title: "Student Profile Updated",
+        message: `${name} ne apna profile update kiya hai.`,
+        type: "Profile",
+      })
+
       setStudent({ ...student, name, fatherName, mobile })
       localStorage.setItem("userName", name)
       setProfileMessage("Profile successfully update ho gaya. ✅")
@@ -750,184 +789,83 @@ function StudentHome() {
     }
   }
 
-  const getNotificationTime = (data) => {
-    if (data?.createdAt?.toMillis) {
-      return data.createdAt.toMillis()
-    }
+  useEffect(() => {
+    if (!student?.email) return
 
-    if (data?.createdAt?.seconds) {
-      return data.createdAt.seconds * 1000
-    }
+    const email = String(student.email).toLowerCase()
 
-    return Date.now()
-  }
+    const notificationsQuery = query(
+      collection(db, "notifications"),
+      where("studentEmail", "==", email)
+    )
 
-  const isNotificationForStudent = (data) => {
-    if (!student) return false
+    const unsubscribe = onSnapshot(
+      notificationsQuery,
+      (snapshot) => {
+        const list = snapshot.docs
+          .map((item) => {
+            const data = item.data()
+            const createdAt = data.createdAt?.toMillis
+              ? data.createdAt.toMillis()
+              : data.createdAt?.seconds
+                ? data.createdAt.seconds * 1000
+                : Date.now()
 
-    const sameBranch =
-      !data?.branch ||
-      data.branch === student.branch
-
-    const sameClass =
-      !data?.className ||
-      data.className === student.className
-
-    const sameStream =
-      !data?.stream ||
-      !student.stream ||
-      data.stream === student.stream
-
-    const sameStudent =
-      !data?.studentEmail ||
-      data.studentEmail?.toLowerCase() === student.email?.toLowerCase()
-
-    const sameStudentId =
-      !data?.studentId ||
-      data.studentId === student.studentId
-
-    return sameBranch && sameClass && sameStream && sameStudent && sameStudentId
-  }
-
-  const createNotificationText = (collectionName, data) => {
-    if (collectionName === "results") {
-      return {
-        type: "Result",
-        icon: "📊",
-        title: "New Result Published",
-        message: `${data.exam || "Exam"} result is now available.`,
-      }
-    }
-
-    if (collectionName === "notices") {
-      return {
-        type: "Notice",
-        icon: "📢",
-        title: "New Notice",
-        message: data.title || data.message || "A new notice has been published.",
-      }
-    }
-
-    if (collectionName === "studyMaterials") {
-      return {
-        type: "Study Material",
-        icon: "📖",
-        title: "New Study Material",
-        message: data.title || "New study material is available.",
-      }
-    }
-
-    if (collectionName === "certificates") {
-      return {
-        type: "Certificate",
-        icon: "📜",
-        title: "New Certificate",
-        message: data.certificateTitle || "A new certificate has been issued.",
-      }
-    }
-
-    if (collectionName === "fees") {
-      return {
-        type: "Fees",
-        icon: "💰",
-        title: "Fees Update",
-        message: data.title || data.description || "Your fee information has been updated.",
-      }
-    }
-
-    return null
-  }
-
-  const checkForNewNotifications = async () => {
-    if (!student?.id) return
-
-    const collectionsToCheck = [
-      "results",
-      "notices",
-      "studyMaterials",
-      "certificates",
-      "fees",
-    ]
-
-    const storageKey = `jsc_notification_seen_${student.id}`
-    let seenIds = {}
-
-    try {
-      seenIds = JSON.parse(localStorage.getItem(storageKey) || "{}")
-    } catch {
-      seenIds = {}
-    }
-
-    const newNotifications = []
-    const nextSeenIds = { ...seenIds }
-
-    for (const collectionName of collectionsToCheck) {
-      try {
-        const snapshot = await getDocs(collection(db, collectionName))
-
-        snapshot.forEach((item) => {
-          const data = item.data()
-
-          if (!isNotificationForStudent(data)) return
-
-          const status = String(data.status || "").toLowerCase()
-
-          if (["draft", "inactive", "rejected"].includes(status)) return
-
-          const itemKey = `${collectionName}_${item.id}`
-
-          if (!Object.prototype.hasOwnProperty.call(seenIds, itemKey)) {
-            const notification = createNotificationText(collectionName, data)
-
-            if (notification) {
-              newNotifications.push({
-                id: itemKey,
-                ...notification,
-                createdAt: getNotificationTime(data),
-                read: false,
-              })
+            return {
+              id: item.id,
+              type: data.type || "General",
+              icon:
+                data.type === "Result"
+                  ? "📊"
+                  : data.type === "Notice"
+                    ? "📢"
+                    : data.type === "Study Material"
+                      ? "📖"
+                      : data.type === "Certificate"
+                        ? "📜"
+                        : data.type === "Fees"
+                          ? "💰"
+                          : "🔔",
+              title: data.title || "Notification",
+              message: data.message || "",
+              createdAt,
+              read: false,
             }
+          })
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, 50)
+
+        setNotifications((prev) => {
+          const previousIds = new Set(prev.map((item) => item.id))
+          const hasNew = list.some((item) => !previousIds.has(item.id))
+
+          if (hasNew && prev.length > 0) {
+            playNotificationSound()
           }
 
-          nextSeenIds[itemKey] = true
+          const oldReadIds = new Set(
+            prev.filter((item) => item.read).map((item) => item.id)
+          )
+
+          return list.map((item) => ({
+            ...item,
+            read: oldReadIds.has(item.id),
+          }))
         })
-      } catch (err) {
-        console.log(`Notification check failed for ${collectionName}:`, err)
+      },
+      (error) => {
+        console.error("Realtime notification error:", error)
       }
-    }
-
-    localStorage.setItem(storageKey, JSON.stringify(nextSeenIds))
-
-    if (newNotifications.length > 0) {
-      setNotifications((prev) => [
-        ...newNotifications.reverse(),
-        ...prev,
-      ].slice(0, 50))
-
-      playNotificationSound()
-    }
-  }
-
-  useEffect(() => {
-    if (!student?.id) return
-
-    checkForNewNotifications()
-
-    notificationTimerRef.current = setInterval(() => {
-      checkForNewNotifications()
-    }, 15000)
+    )
 
     const unlockSound = () => {
       try {
         const AudioContextClass =
           window.AudioContext || window.webkitAudioContext
-
         if (!AudioContextClass) return
-
         if (!audioContextRef.current) {
           audioContextRef.current = new AudioContextClass()
         }
-
         if (audioContextRef.current.state === "suspended") {
           audioContextRef.current.resume().catch(() => {})
         }
@@ -937,13 +875,10 @@ function StudentHome() {
     window.addEventListener("click", unlockSound, { once: true })
 
     return () => {
-      if (notificationTimerRef.current) {
-        clearInterval(notificationTimerRef.current)
-      }
-
+      unsubscribe()
       window.removeEventListener("click", unlockSound)
     }
-  }, [student?.id])
+  }, [student?.email])
 
   const unreadNotificationCount = notifications.filter(
     (item) => !item.read

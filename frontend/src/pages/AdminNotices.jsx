@@ -139,7 +139,8 @@ function AdminNotices({ branch = "Itimha" }) {
           branch: branch,
 
           targetType: "student",
-          targetEmail: student.email,
+          targetEmail: null,
+          studentEmail: String(student.email).toLowerCase(),
 
           studentId:
             student.studentId ||

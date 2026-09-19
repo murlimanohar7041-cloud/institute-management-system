@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../firebase";
+import { sendStudentNotification } from "../utils/notificationService";
 
 function AdminPayments({ branch }) {
   const [payments, setPayments] = useState([]);
@@ -93,6 +94,22 @@ function AdminPayments({ branch }) {
             : item
         )
       );
+
+      await sendStudentNotification({
+        studentEmail: payment.studentEmail,
+        studentId: payment.studentId || "",
+        studentFirestoreId: payment.studentFirestoreId || "",
+        studentName: payment.studentName || "",
+        branch: payment.branch || branch,
+        className: payment.className || "",
+        stream: payment.stream || "",
+        title: newStatus === "Approved" ? "Payment Approved" : "Payment Rejected",
+        message:
+          newStatus === "Approved"
+            ? `Aapka ₹${payment.amount || 0} payment approve ho gaya hai.`
+            : `Aapka ₹${payment.amount || 0} payment reject kar diya gaya hai.`,
+        type: "Payment",
+      });
 
       alert(
         newStatus === "Approved"

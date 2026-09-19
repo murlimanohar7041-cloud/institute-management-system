@@ -10,6 +10,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { sendStudentNotification } from "../utils/notificationService";
 
 export default function AdminCertificates({ branch }) {
   const [students, setStudents] = useState([]);
@@ -129,8 +130,10 @@ export default function AdminCertificates({ branch }) {
     try {
       setSaving(true);
 
+      const certificateId = `CERT-${Date.now()}`;
+
       await addDoc(collection(db, "certificates"), {
-        certificateId: `CERT-${Date.now()}`,
+        certificateId,
 
         studentFirestoreId: student.firestoreId,
         studentId: student.studentId || "",
@@ -151,6 +154,19 @@ export default function AdminCertificates({ branch }) {
 
         status: "Issued",
         createdAt: serverTimestamp(),
+      });
+
+      await sendStudentNotification({
+        studentEmail: student.email,
+        studentId: student.studentId || "",
+        studentFirestoreId: student.firestoreId || "",
+        studentName: student.name || "",
+        branch: student.branch || branch,
+        className: student.className || "",
+        stream: student.stream || "",
+        title: "New Certificate Issued",
+        message: `${form.certificateTitle.trim()} certificate issue ho gaya hai. Certificate No: ${form.certificateNumber.trim() || certificateId}`,
+        type: "Certificate",
       });
 
       alert("Certificate successfully send ho gaya. ✅");

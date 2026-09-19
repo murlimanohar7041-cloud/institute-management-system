@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from "react"
 import { db } from "../firebase"
+import { sendStudentNotification } from "../utils/notificationService"
 
 import {
   collection,
@@ -193,6 +194,19 @@ function Students({ branch }) {
           studentRef,
           updatedData
         )
+
+        await sendStudentNotification({
+          studentEmail: email,
+          studentId: students.find((item) => item.firestoreId === editingId)?.studentId || "",
+          studentFirestoreId: editingId,
+          studentName: updatedData.name,
+          branch,
+          className: updatedData.className,
+          stream: updatedData.stream,
+          title: "Profile Updated by Admin",
+          message: "Admin ne aapke student profile details update ki hain.",
+          type: "Profile",
+        })
 
         const updatedStudents = students.map(
           (student) =>

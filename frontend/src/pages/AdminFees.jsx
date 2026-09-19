@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore"
 
 import { db } from "../firebase"
+import { sendStudentNotification } from "../utils/notificationService"
 
 function AdminFees({ branch }) {
   const [fees, setFees] = useState([])
@@ -101,6 +102,15 @@ function AdminFees({ branch }) {
       }
 
       await addDoc(collection(db, "fees"), newFee)
+
+      await sendStudentNotification({
+        studentEmail: newFee.studentEmail,
+        branch,
+        className: newFee.className,
+        title: "Fees Updated",
+        message: `${newFee.month} ki ₹${newFee.amount} fee entry ${newFee.status} status ke saath update hui hai.`,
+        type: "Fees",
+      })
 
       alert("Fee successfully save ho gayi.")
 
