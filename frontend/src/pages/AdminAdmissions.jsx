@@ -1,19 +1,24 @@
 import { useEffect, useState } from "react"
+
 import {
   collection,
   getDocs,
   doc,
   updateDoc,
   setDoc,
+  deleteDoc,
   serverTimestamp,
 } from "firebase/firestore"
+
 import { db } from "../firebase"
 
 function AdminAdmissions({ branch }) {
   const [enquiries, setEnquiries] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Firestore se admission applications load
+  // =========================
+  // LOAD ADMISSION ENQUIRIES
+  // =========================
   useEffect(() => {
     loadAdmissions()
   }, [branch])
@@ -35,6 +40,7 @@ function AdminAdmissions({ branch }) {
         .sort((a, b) => {
           const dateA = a.createdAt?.seconds || 0
           const dateB = b.createdAt?.seconds || 0
+
           return dateB - dateA
         })
 
@@ -49,13 +55,18 @@ function AdminAdmissions({ branch }) {
     }
   }
 
-  // Student ID generate
+  // =========================
+  // GENERATE STUDENT ID
+  // =========================
   const generateStudentId = async () => {
     const studentsSnapshot = await getDocs(
       collection(db, "students")
     )
 
-    const prefix = branch === "Itimha" ? "JSCI" : "JSCB"
+    const prefix =
+      branch === "Itimha"
+        ? "JSCI"
+        : "JSCB"
 
     let maxNumber = 0
 
@@ -64,12 +75,12 @@ function AdminAdmissions({ branch }) {
 
       if (
         student.branch === branch &&
-        student.studentId?.startsWith(prefix + "/")
+        student.studentId &&
+        student.studentId.startsWith(prefix + "/")
       ) {
-        const number = parseInt(
-          student.studentId.split("/")[1],
-          10
-        )
+        const parts = student.studentId.split("/")
+
+        const number = parseInt(parts[1], 10)
 
         if (!isNaN(number) && number > maxNumber) {
           maxNumber = number
@@ -80,7 +91,9 @@ function AdminAdmissions({ branch }) {
     return `${prefix}/${String(maxNumber + 1).padStart(3, "0")}`
   }
 
-  // Approve admission
+  // =========================
+  // APPROVE ADMISSION
+  // =========================
   const approveAdmission = async (admission) => {
     const confirmApprove = window.confirm(
       `Are you sure you want to approve ${admission.name}?`
@@ -89,36 +102,93 @@ function AdminAdmissions({ branch }) {
     if (!confirmApprove) return
 
     try {
+      // Generate Student ID
       const studentId = await generateStudentId()
 
-      console.log("Generated Student ID:", studentId)
+      console.log(
+        "Generated Student ID:",
+        studentId
+      )
 
-      const studentData = {
-        name: admission.name,
-        fatherName: admission.fatherName,
-        email: admission.email,
-        mobile: admission.mobile,
-        className: admission.className,
-        stream: admission.stream || "",
-        branch: admission.branch,
-        role: "student",
-        status: "approved",
-        studentId: studentId,
-        applicationId: admission.applicationId,
-        admissionId: admission.firestoreId,
-        createdAt: admission.createdAt || serverTimestamp(),
-        approvedAt: serverTimestamp(),
+      // Clean email
+      const studentEmail =
+        admission.email?.trim().toLowerCase() || ""
+
+      if (!studentEmail) {
+        alert(
+          "Is admission enquiry me Gmail / Email nahi hai.\n\nApproval nahi kiya ja sakta."
+        )
+        return
       }
 
-      // Student document create
+      // =========================
+      // STUDENT DATA
+      // =========================
+      const studentData = {
+        name: admission.name || "",
+        fatherName: admission.fatherName || "",
+
+        // IMPORTANT
+        email: studentEmail,
+
+        mobile: admission.mobile || "",
+        className: admission.className || "",
+        stream: admission.stream || "",
+        branch: admission.branch || branch,
+
+        role: "student",
+        status: "approved",
+
+        studentId: studentId,
+
+        applicationId:
+          admission.applicationId || "",
+
+        admissionId:
+          admission.firestoreId,
+
+        createdAt:
+          admission.createdAt || serverTimestamp(),
+
+        approvedAt:
+          serverTimestamp(),
+      }
+
+      // =========================
+      // CREATE STUDENT
+      // =========================
       await setDoc(
-        doc(db, "students", admission.firestoreId),
+        doc(
+          db,
+          "students",
+          admission.firestoreId
+        ),
         studentData
       )
 
-      // Admission status update
+      // =========================
+      // REMOVE OLD REVOCATION
+      // =========================
+      await deleteDoc(
+        doc(
+          db,
+          "revokedStudents",
+          studentEmail
+        )
+      ).catch(() => {
+        // Agar revokedStudents document nahi hai
+        // to koi problem nahi
+      })
+
+      // =========================
+      // UPDATE ADMISSION
+      // =========================
       await updateDoc(
-        doc(db, "admissions", admission.firestoreId),
+        doc(
+          db,
+          "admissions",
+          admission.firestoreId
+        ),
         {
           status: "approved",
           studentId: studentId,
@@ -127,13 +197,16 @@ function AdminAdmissions({ branch }) {
       )
 
       alert(
-        `Admission approved successfully!\n\nStudent ID: ${studentId}`
+        `Admission approved successfully! ✅\n\nStudent ID: ${studentId}\nGmail: ${studentEmail}`
       )
 
-      // List refresh
+      // Refresh list
       await loadAdmissions()
     } catch (error) {
-      console.error("Approve error:", error)
+      console.error(
+        "Approve error:",
+        error
+      )
 
       alert(
         "Admission approve nahi hua.\n\n" +
@@ -142,7 +215,9 @@ function AdminAdmissions({ branch }) {
     }
   }
 
-  // Reject admission
+  // =========================
+  // REJECT ADMISSION
+  // =========================
   const rejectAdmission = async (admission) => {
     const confirmReject = window.confirm(
       `Are you sure you want to reject ${admission.name}'s admission?`
@@ -152,7 +227,11 @@ function AdminAdmissions({ branch }) {
 
     try {
       await updateDoc(
-        doc(db, "admissions", admission.firestoreId),
+        doc(
+          db,
+          "admissions",
+          admission.firestoreId
+        ),
         {
           status: "rejected",
           rejectedAt: serverTimestamp(),
@@ -161,9 +240,13 @@ function AdminAdmissions({ branch }) {
 
       alert("Admission rejected.")
 
+      // Refresh list
       await loadAdmissions()
     } catch (error) {
-      console.error("Reject error:", error)
+      console.error(
+        "Reject error:",
+        error
+      )
 
       alert(
         "Admission reject nahi hua.\n\n" +
@@ -172,10 +255,47 @@ function AdminAdmissions({ branch }) {
     }
   }
 
+  // =========================
+  // STATUS HELPER
+  // =========================
+  const getStatus = (status) => {
+    if (!status) return "new"
+
+    return String(status).toLowerCase()
+  }
+
+  // =========================
+  // STATUS STYLE
+  // =========================
+  const getStatusClass = (status) => {
+    const currentStatus = getStatus(status)
+
+    if (
+      currentStatus === "new" ||
+      currentStatus === "pending"
+    ) {
+      return "bg-yellow-100 text-yellow-700"
+    }
+
+    if (currentStatus === "approved") {
+      return "bg-green-100 text-green-700"
+    }
+
+    if (
+      currentStatus === "rejected" ||
+      currentStatus === "cancelled" ||
+      currentStatus === "canceled"
+    ) {
+      return "bg-red-100 text-red-700"
+    }
+
+    return "bg-gray-100 text-gray-700"
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-5 sm:p-7 lg:p-8">
 
-      {/* Header */}
+      {/* HEADER */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 
         <div>
@@ -183,25 +303,29 @@ function AdminAdmissions({ branch }) {
             Admission Management
           </p>
 
-          <h1 className="mt-1 text-3xl font-extrabold">
+          <h1 className="mt-1 text-3xl font-extrabold text-gray-900">
             Admission Enquiries
           </h1>
 
           <p className="mt-1 text-sm text-gray-500">
-            Manage admission applications for {branch} branch.
+            Manage admission applications for{" "}
+            <span className="font-bold text-gray-700">
+              {branch}
+            </span>{" "}
+            branch.
           </p>
         </div>
 
         <button
           onClick={loadAdmissions}
-          className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-700"
+          className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white transition hover:bg-blue-700"
         >
           ↻ Refresh
         </button>
 
       </div>
 
-      {/* Loading */}
+      {/* LOADING */}
       {loading && (
         <div className="mt-6 rounded-2xl bg-white p-10 text-center shadow-sm">
           <p className="font-semibold text-gray-600">
@@ -210,148 +334,198 @@ function AdminAdmissions({ branch }) {
         </div>
       )}
 
-      {/* Table */}
+      {/* TABLE */}
       {!loading && (
         <div className="mt-6 overflow-x-auto rounded-2xl bg-white shadow-sm">
 
           <table className="w-full min-w-[1200px] text-left">
 
+            {/* TABLE HEADER */}
             <thead className="bg-gray-50">
-
               <tr>
-                <th className="px-5 py-4">Application ID</th>
-                <th className="px-5 py-4">Student</th>
-                <th className="px-5 py-4">Father</th>
-                <th className="px-5 py-4">Gmail</th>
-                <th className="px-5 py-4">Mobile</th>
-                <th className="px-5 py-4">Class</th>
-                <th className="px-5 py-4">Stream</th>
-                <th className="px-5 py-4">Branch</th>
-                <th className="px-5 py-4">Status</th>
-                <th className="px-5 py-4">Action</th>
-              </tr>
 
+                <th className="px-5 py-4 text-sm font-bold text-gray-700">
+                  Application ID
+                </th>
+
+                <th className="px-5 py-4 text-sm font-bold text-gray-700">
+                  Student
+                </th>
+
+                <th className="px-5 py-4 text-sm font-bold text-gray-700">
+                  Father
+                </th>
+
+                <th className="px-5 py-4 text-sm font-bold text-gray-700">
+                  Gmail
+                </th>
+
+                <th className="px-5 py-4 text-sm font-bold text-gray-700">
+                  Mobile
+                </th>
+
+                <th className="px-5 py-4 text-sm font-bold text-gray-700">
+                  Class
+                </th>
+
+                <th className="px-5 py-4 text-sm font-bold text-gray-700">
+                  Stream
+                </th>
+
+                <th className="px-5 py-4 text-sm font-bold text-gray-700">
+                  Branch
+                </th>
+
+                <th className="px-5 py-4 text-sm font-bold text-gray-700">
+                  Status
+                </th>
+
+                <th className="px-5 py-4 text-sm font-bold text-gray-700">
+                  Action
+                </th>
+
+              </tr>
             </thead>
 
+            {/* TABLE BODY */}
             <tbody className="divide-y">
 
-              {enquiries.map((item) => (
+              {enquiries.map((item) => {
 
-                <tr key={item.firestoreId}>
+                const currentStatus =
+                  getStatus(item.status)
 
-                  {/* Application ID */}
-                  <td className="px-5 py-4 font-bold text-blue-600">
-                    {item.applicationId}
-                  </td>
+                const canTakeAction =
+                  currentStatus === "new" ||
+                  currentStatus === "pending"
 
-                  {/* Student */}
-                  <td className="px-5 py-4 font-bold">
-                    {item.name}
-                  </td>
+                return (
+                  <tr
+                    key={item.firestoreId}
+                    className="transition hover:bg-gray-50"
+                  >
 
-                  {/* Father */}
-                  <td className="px-5 py-4">
-                    {item.fatherName}
-                  </td>
+                    {/* APPLICATION ID */}
+                    <td className="px-5 py-4 font-bold text-blue-600">
+                      {item.applicationId || "-"}
+                    </td>
 
-                  {/* Gmail */}
-                  <td className="px-5 py-4">
-                    {item.email}
-                  </td>
+                    {/* STUDENT */}
+                    <td className="px-5 py-4 font-bold text-gray-900">
+                      {item.name || "-"}
+                    </td>
 
-                  {/* Mobile */}
-                  <td className="px-5 py-4">
-                    {item.mobile}
-                  </td>
+                    {/* FATHER */}
+                    <td className="px-5 py-4 text-gray-700">
+                      {item.fatherName || "-"}
+                    </td>
 
-                  {/* Class */}
-                  <td className="px-5 py-4">
-                    {item.className}
-                  </td>
+                    {/* GMAIL */}
+                    <td className="px-5 py-4 text-gray-700">
+                      {item.email || "-"}
+                    </td>
 
-                  {/* Stream */}
-                  <td className="px-5 py-4">
-                    {item.stream || "-"}
-                  </td>
+                    {/* MOBILE */}
+                    <td className="px-5 py-4 text-gray-700">
+                      {item.mobile || "-"}
+                    </td>
 
-                  {/* Branch */}
-                  <td className="px-5 py-4">
-                    {item.branch}
-                  </td>
+                    {/* CLASS */}
+                    <td className="px-5 py-4 text-gray-700">
+                      {item.className || "-"}
+                    </td>
 
-                  {/* Status */}
-                  <td className="px-5 py-4">
+                    {/* STREAM */}
+                    <td className="px-5 py-4 text-gray-700">
+                      {item.stream || "-"}
+                    </td>
 
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-bold ${
-                        item.status === "pending"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : item.status === "approved"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {item.status?.toUpperCase()}
-                    </span>
+                    {/* BRANCH */}
+                    <td className="px-5 py-4 font-semibold text-gray-700">
+                      {item.branch || "-"}
+                    </td>
 
-                  </td>
+                    {/* STATUS */}
+                    <td className="px-5 py-4">
 
-                  {/* Action */}
-                  <td className="px-5 py-4">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusClass(
+                          item.status
+                        )}`}
+                      >
+                        {currentStatus.toUpperCase()}
+                      </span>
 
-                    {item.status === "pending" && (
-                      <div className="flex gap-2">
+                    </td>
 
-                        <button
-                          onClick={() =>
-                            approveAdmission(item)
-                          }
-                          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"
-                        >
-                          Approve
-                        </button>
+                    {/* ACTION */}
+                    <td className="px-5 py-4">
 
-                        <button
-                          onClick={() =>
-                            rejectAdmission(item)
-                          }
-                          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
-                        >
-                          Reject
-                        </button>
+                      {/* NEW / PENDING */}
+                      {canTakeAction && (
+                        <div className="flex gap-2">
 
-                      </div>
-                    )}
+                          {/* APPROVE */}
+                          <button
+                            onClick={() =>
+                              approveAdmission(item)
+                            }
+                            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-green-700"
+                          >
+                            ✓ Approve
+                          </button>
 
-                    {item.status === "approved" && (
-                      <div>
-                        <p className="font-bold text-green-600">
-                          Approved
+                          {/* REJECT */}
+                          <button
+                            onClick={() =>
+                              rejectAdmission(item)
+                            }
+                            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700"
+                          >
+                            ✕ Reject
+                          </button>
+
+                        </div>
+                      )}
+
+                      {/* APPROVED */}
+                      {currentStatus === "approved" && (
+                        <div>
+
+                          <p className="font-bold text-green-600">
+                            ✓ Approved
+                          </p>
+
+                          <p className="mt-1 text-xs text-gray-500">
+                            ID:{" "}
+                            <span className="font-bold">
+                              {item.studentId || "-"}
+                            </span>
+                          </p>
+
+                        </div>
+                      )}
+
+                      {/* REJECTED */}
+                      {(currentStatus === "rejected" ||
+                        currentStatus === "cancelled" ||
+                        currentStatus === "canceled") && (
+                        <p className="font-bold text-red-600">
+                          ✕ Rejected
                         </p>
+                      )}
 
-                        <p className="text-xs text-gray-500">
-                          ID: {item.studentId}
-                        </p>
-                      </div>
-                    )}
+                    </td>
 
-                    {item.status === "rejected" && (
-                      <p className="font-bold text-red-600">
-                        Rejected
-                      </p>
-                    )}
-
-                  </td>
-
-                </tr>
-
-              ))}
+                  </tr>
+                )
+              })}
 
             </tbody>
 
           </table>
 
-          {/* Empty */}
+          {/* EMPTY */}
           {enquiries.length === 0 && (
             <div className="p-14 text-center">
 
@@ -359,12 +533,13 @@ function AdminAdmissions({ branch }) {
                 📩
               </div>
 
-              <p className="mt-3 font-bold">
+              <p className="mt-3 font-bold text-gray-800">
                 No admission applications
               </p>
 
               <p className="mt-1 text-sm text-gray-500">
-                No applications found for {branch} branch.
+                No applications found for{" "}
+                {branch} branch.
               </p>
 
             </div>

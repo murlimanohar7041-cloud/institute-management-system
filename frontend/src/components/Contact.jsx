@@ -1,100 +1,93 @@
 function Contact() {
   return (
-    <section id="contact" className="scroll-mt-24 py-20">
-      <div className="mx-auto grid max-w-7xl gap-10 px-5 lg:grid-cols-2 lg:px-8">
-        <div>
-          <p className="font-bold uppercase tracking-widest text-red-600">
-            Contact
-          </p>
+    <section
+      id="contact"
+      className="scroll-mt-24 px-5 py-16 lg:px-8"
+    >
+      <div className="mx-auto max-w-7xl">
 
-          <h2 className="mt-3 text-3xl font-extrabold text-gray-950 sm:text-4xl">
-            Get in touch with us
-          </h2>
+        <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
 
-          <p className="mt-5 leading-7 text-gray-600">
-            Have a question about classes, admission or branches?
-            Contact J. Solution Classes.
-          </p>
+          {/* Contact Information */}
+          <div>
+            <p className="font-bold uppercase tracking-widest text-red-600">
+              Contact
+            </p>
 
-          <div className="mt-8 space-y-6">
-            <div>
-              <p className="text-sm font-bold text-gray-500">Phone</p>
-              <a
-                href="tel:8809573469"
-                className="font-bold text-blue-700"
-              >
-                8809573469
-              </a>
-            </div>
+            <h2 className="mt-3 text-3xl font-extrabold text-gray-900 sm:text-4xl">
+              Get in touch with us
+            </h2>
 
-            <div>
-              <p className="text-sm font-bold text-gray-500">Email</p>
-              <a
-                href="mailto:murlimanohar7041@gmail.com"
-                className="break-all font-bold text-blue-700"
-              >
-                murlimanohar7041@gmail.com
-              </a>
-            </div>
+            <p className="mt-4 max-w-xl text-gray-600">
+              Have a question about classes, admission or branches?
+              Contact J. Solution Classes.
+            </p>
 
-            <div>
-              <p className="text-sm font-bold text-gray-500">Branches</p>
-              <p className="text-gray-700">
-                Itimha & Bardiha, Nasriganj, Rohtas, Bihar
-              </p>
+            <div className="mt-8 space-y-6">
+
+              <div>
+                <p className="text-sm font-semibold text-gray-500">
+                  Phone
+                </p>
+                <a
+                  href="tel:8809573469"
+                  className="font-bold text-blue-600 hover:underline"
+                >
+                  8809573469
+                </a>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-gray-500">
+                  Email
+                </p>
+                <a
+                  href="mailto:murlimanohar7041@gmail.com"
+                  className="font-bold text-blue-600 hover:underline"
+                >
+                  murlimanohar7041@gmail.com
+                </a>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-gray-500">
+                  Branches
+                </p>
+                <p className="text-gray-700">
+                  Itimha & Bardiha, Nasriganj, Rohtas, Bihar
+                </p>
+              </div>
+
             </div>
           </div>
+
+          {/* Contact Card */}
+          <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+
+            <div className="rounded-2xl bg-red-50 p-6">
+              <div className="text-4xl">📚</div>
+
+              <h3 className="mt-4 text-2xl font-extrabold text-gray-900">
+                J. Solution Classes
+              </h3>
+
+              <p className="mt-2 text-gray-600">
+                Classes 9th to 12th with Science and Arts streams
+                for 11th and 12th.
+              </p>
+
+              <a
+                href="#admission"
+                className="mt-6 inline-flex rounded-xl bg-red-600 px-6 py-3 font-bold text-white shadow-md transition hover:bg-red-700"
+              >
+                Apply for Admission →
+              </a>
+            </div>
+
+          </div>
+
         </div>
 
-        <form
-          className="rounded-3xl border border-gray-200 bg-gray-50 p-6 sm:p-8"
-          onSubmit={(e) => e.preventDefault()}
-        >
-          <h3 className="text-2xl font-bold text-gray-950">
-            Admission Enquiry
-          </h3>
-
-          <p className="mt-2 text-sm text-gray-500">
-            Fill in your details and our team can contact you.
-          </p>
-
-          <div className="mt-6 space-y-4">
-            <input
-              type="text"
-              placeholder="Student Name"
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none transition focus:border-blue-600"
-            />
-
-            <input
-              type="tel"
-              placeholder="Mobile Number"
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none transition focus:border-blue-600"
-            />
-
-            <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-blue-600">
-              <option>Select Class</option>
-              <option>Class 9th</option>
-              <option>Class 10th</option>
-              <option>Class 11th - Science</option>
-              <option>Class 11th - Arts</option>
-              <option>Class 12th - Science</option>
-              <option>Class 12th - Arts</option>
-            </select>
-
-            <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-blue-600">
-              <option>Select Branch</option>
-              <option>Itimha</option>
-              <option>Bardiha</option>
-            </select>
-
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-red-600 px-5 py-3.5 font-bold text-white transition hover:bg-red-700"
-            >
-              Send Enquiry
-            </button>
-          </div>
-        </form>
       </div>
     </section>
   )

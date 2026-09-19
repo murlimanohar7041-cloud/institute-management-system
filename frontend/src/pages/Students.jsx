@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
 
+import { useEffect, useState } from "react"
 import { db } from "../firebase"
 
 import {
@@ -9,27 +9,19 @@ import {
   deleteDoc,
   doc,
   updateDoc,
+  setDoc,
 } from "firebase/firestore"
 
 function Students({ branch }) {
-  // =========================
-  // STUDENTS
-  // =========================
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // =========================
-  // UI STATES
-  // =========================
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState("")
   const [classFilter, setClassFilter] = useState("All")
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  // =========================
-  // FORM
-  // =========================
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -39,9 +31,6 @@ function Students({ branch }) {
     stream: "",
   })
 
-  // =========================
-  // LOAD STUDENTS
-  // =========================
   useEffect(() => {
     const loadStudents = async () => {
       try {
@@ -67,7 +56,6 @@ function Students({ branch }) {
       } catch (error) {
         console.error("Error loading students:", error)
 
-        // LocalStorage fallback
         try {
           const savedStudents =
             localStorage.getItem("students")
@@ -89,9 +77,6 @@ function Students({ branch }) {
     loadStudents()
   }, [])
 
-  // =========================
-  // FORM CHANGE
-  // =========================
   const handleChange = (e) => {
     const { name, value } = e.target
 
@@ -105,9 +90,6 @@ function Students({ branch }) {
     }))
   }
 
-  // =========================
-  // GENERATE STUDENT ID
-  // =========================
   const generateStudentId = () => {
     const branchPrefix =
       branch?.toLowerCase() === "itimha"
@@ -141,9 +123,6 @@ function Students({ branch }) {
     return newId
   }
 
-  // =========================
-  // ADD / UPDATE STUDENT
-  // =========================
   const addStudent = async (e) => {
     e.preventDefault()
 
@@ -189,9 +168,8 @@ function Students({ branch }) {
     try {
       setSaving(true)
 
-      // =========================
-      // UPDATE
-      // =========================
+      const email = form.email.trim().toLowerCase()
+
       if (editingId) {
         const studentRef = doc(
           db,
@@ -201,14 +179,13 @@ function Students({ branch }) {
 
         const updatedData = {
           name: form.name.trim(),
-          email: form.email
-            .trim()
-            .toLowerCase(),
+          email,
           fatherName: form.fatherName.trim(),
           mobile: form.mobile,
           className: form.className,
           stream: form.stream,
-          branch: branch,
+          branch,
+          status: "approved",
           updatedAt: new Date().toISOString(),
         }
 
@@ -237,26 +214,24 @@ function Students({ branch }) {
         alert("Student updated successfully!")
 
         setEditingId(null)
-      }
 
-      // =========================
-      // ADD NEW
-      // =========================
-      else {
+        // Agar previously blocked tha,
+        // profile edit/update hone par access restore hoga.
+        await deleteDoc(
+          doc(db, "revokedStudents", email)
+        ).catch(() => {})
+      } else {
         const newStudent = {
           id: generateStudentId(),
           name: form.name.trim(),
-          email: form.email
-            .trim()
-            .toLowerCase(),
+          email,
           fatherName: form.fatherName.trim(),
           mobile: form.mobile,
           className: form.className,
           stream: form.stream,
-          branch: branch,
+          branch,
           status: "approved",
-          createdAt:
-            new Date().toISOString(),
+          createdAt: new Date().toISOString(),
         }
 
         const docRef = await addDoc(
@@ -281,12 +256,16 @@ function Students({ branch }) {
           JSON.stringify(updatedStudents)
         )
 
+        // Agar email pehle blocked tha to unblock
+        await deleteDoc(
+          doc(db, "revokedStudents", email)
+        ).catch(() => {})
+
         alert(
           `Student registered successfully!\nStudent ID: ${newStudent.id}`
         )
       }
 
-      // Reset form
       setForm({
         name: "",
         email: "",
@@ -314,61 +293,81 @@ function Students({ branch }) {
   // =========================
   // DELETE STUDENT
   // =========================
-  const deleteStudent = async (
-    firestoreId,
-    studentId
-  ) => {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this student?"
-    )
+const deleteStudent = async (firestoreId, studentId) => {
+  const student = students.find(
+    (item) =>
+      item.firestoreId === firestoreId ||
+      item.id === studentId
+  )
 
-    if (!confirmDelete) return
+  const confirmDelete = window.confirm(
+    `Are you sure you want to delete ${
+      student?.name || "this student"
+    }?\n\nDelete karne ke baad student ko dobara Admission Enquiry submit karni hogi.`
+  )
 
-    try {
-      if (firestoreId) {
-        await deleteDoc(
-          doc(db, "students", firestoreId)
-        )
-      }
+  if (!confirmDelete) return
 
-      const updatedStudents = students.filter(
-        (student) =>
-          student.firestoreId !== firestoreId &&
-          student.id !== studentId
-      )
+  try {
+    // Student email ko revoke list me save karo
+    if (student?.email) {
+      const email = student.email.trim().toLowerCase()
 
-      setStudents(updatedStudents)
-
-      localStorage.setItem(
-        "students",
-        JSON.stringify(updatedStudents)
-      )
-
-      alert("Student deleted successfully!")
-    } catch (error) {
-      console.error(
-        "Error deleting student:",
-        error
-      )
-
-      alert(
-        "Student delete nahi hua. Firebase rules check karein."
+      await setDoc(
+        doc(db, "revokedStudents", email),
+        {
+          email: email,
+          studentId: student?.id || studentId || null,
+          name: student?.name || "",
+          branch: student?.branch || branch || "",
+          status: "revoked",
+          revokedAt: new Date().toISOString(),
+        }
       )
     }
-  }
 
-  // =========================
-  // EDIT STUDENT
-  // =========================
+    // Student profile delete
+    if (firestoreId) {
+      await deleteDoc(
+        doc(db, "students", firestoreId)
+      )
+    }
+
+    const updatedStudents = students.filter(
+      (item) =>
+        item.firestoreId !== firestoreId &&
+        item.id !== studentId
+    )
+
+    setStudents(updatedStudents)
+
+    localStorage.setItem(
+      "students",
+      JSON.stringify(updatedStudents)
+    )
+
+    alert(
+      "Student deleted successfully!\n\n" +
+      "Student ka login access revoke kar diya gaya hai."
+    )
+  } catch (error) {
+    console.error(
+      "Error deleting student:",
+      error
+    )
+
+    alert(
+      "Student delete nahi hua. Firebase rules check karein."
+    )
+  }
+}
   const editStudent = (student) => {
     setForm({
       name: student.name || "",
       email: student.email || "",
-      fatherName:
-        student.fatherName || "",
+      fatherName: student.fatherName || "",
       mobile: student.mobile || "",
-      className:
-        student.className || "9th",
+      className: student.className || "9th",
       stream: student.stream || "",
     })
 
@@ -384,9 +383,6 @@ function Students({ branch }) {
     })
   }
 
-  // =========================
-  // CLOSE FORM
-  // =========================
   const closeForm = () => {
     setShowForm(false)
     setEditingId(null)
@@ -401,9 +397,6 @@ function Students({ branch }) {
     })
   }
 
-  // =========================
-  // FILTER STUDENTS
-  // =========================
   const filteredStudents = students.filter(
     (student) => {
       const branchMatch =
@@ -435,9 +428,6 @@ function Students({ branch }) {
     }
   )
 
-  // =========================
-  // CLASS COUNT
-  // =========================
   const getClassCount = (className) => {
     return students.filter(
       (student) =>
@@ -452,15 +442,10 @@ function Students({ branch }) {
         student.branch === branch
     ).length
 
-  // =========================
-  // RETURN UI
-  // =========================
   return (
     <div className="min-h-screen bg-gray-50 p-5 sm:p-7 lg:p-8">
 
-      {/* HEADER */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-
         <div>
           <p className="text-sm font-semibold text-blue-600">
             Student Management
@@ -503,7 +488,6 @@ function Students({ branch }) {
         </div>
       </div>
 
-      {/* CLASS SUMMARY */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
 
         <button
@@ -557,40 +541,28 @@ function Students({ branch }) {
 
       </div>
 
-      {/* ADD / EDIT FORM */}
       {showForm && (
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-xl font-extrabold text-gray-950">
+            {editingId
+              ? "Edit Student"
+              : "Add New Student"}
+          </h2>
 
-            <div>
-              <h2 className="text-xl font-extrabold text-gray-950">
-                {editingId
-                  ? "Edit Student"
-                  : "Add New Student"}
-              </h2>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Student will be added to{" "}
-                <span className="font-bold text-blue-700">
-                  {branch}
-                </span>{" "}
-                branch.
-              </p>
-            </div>
-
-            <span className="w-fit rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">
+          <p className="mt-1 text-sm text-gray-500">
+            Student will be added to{" "}
+            <span className="font-bold text-blue-700">
               {branch}
-            </span>
-
-          </div>
+            </span>{" "}
+            branch.
+          </p>
 
           <form
             onSubmit={addStudent}
             className="mt-6 grid gap-5 md:grid-cols-2"
           >
 
-            {/* NAME */}
             <div>
               <label className="mb-2 block text-sm font-bold text-gray-700">
                 Student Name *
@@ -601,13 +573,11 @@ function Students({ branch }) {
                 name="name"
                 value={form.name}
                 onChange={handleChange}
-                placeholder="Enter student name"
                 required
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
               />
             </div>
 
-            {/* EMAIL */}
             <div>
               <label className="mb-2 block text-sm font-bold text-gray-700">
                 Student Google Email *
@@ -618,9 +588,8 @@ function Students({ branch }) {
                 name="email"
                 value={form.email}
                 onChange={handleChange}
-                placeholder="student@gmail.com"
                 required
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
               />
 
               <p className="mt-1 text-xs text-gray-500">
@@ -628,7 +597,6 @@ function Students({ branch }) {
               </p>
             </div>
 
-            {/* FATHER */}
             <div>
               <label className="mb-2 block text-sm font-bold text-gray-700">
                 Father's Name *
@@ -639,13 +607,11 @@ function Students({ branch }) {
                 name="fatherName"
                 value={form.fatherName}
                 onChange={handleChange}
-                placeholder="Enter father's name"
                 required
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
               />
             </div>
 
-            {/* MOBILE */}
             <div>
               <label className="mb-2 block text-sm font-bold text-gray-700">
                 Mobile Number *
@@ -656,15 +622,13 @@ function Students({ branch }) {
                 name="mobile"
                 value={form.mobile}
                 onChange={handleChange}
-                placeholder="Enter mobile number"
                 maxLength="10"
                 pattern="[0-9]{10}"
                 required
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
               />
             </div>
 
-            {/* CLASS */}
             <div>
               <label className="mb-2 block text-sm font-bold text-gray-700">
                 Class *
@@ -674,7 +638,7 @@ function Students({ branch }) {
                 name="className"
                 value={form.className}
                 onChange={handleChange}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none"
               >
                 <option value="9th">9th</option>
                 <option value="10th">10th</option>
@@ -683,7 +647,6 @@ function Students({ branch }) {
               </select>
             </div>
 
-            {/* STREAM */}
             {["11th", "12th"].includes(
               form.className
             ) && (
@@ -697,7 +660,7 @@ function Students({ branch }) {
                   value={form.stream}
                   onChange={handleChange}
                   required
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none"
                 >
                   <option value="">
                     Select Stream
@@ -710,15 +673,10 @@ function Students({ branch }) {
                   <option value="Arts">
                     Arts
                   </option>
-
-                  <option value="Commerce">
-                    Commerce
-                  </option>
                 </select>
               </div>
             )}
 
-            {/* BRANCH */}
             <div>
               <label className="mb-2 block text-sm font-bold text-gray-700">
                 Branch
@@ -729,7 +687,6 @@ function Students({ branch }) {
               </div>
             </div>
 
-            {/* STUDENT ID */}
             <div>
               <label className="mb-2 block text-sm font-bold text-gray-700">
                 Student ID
@@ -746,13 +703,12 @@ function Students({ branch }) {
               </div>
             </div>
 
-            {/* BUTTONS */}
             <div className="flex gap-3 md:col-span-2">
 
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-xl bg-red-600 px-6 py-3 font-bold text-white shadow-md transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl bg-red-600 px-6 py-3 font-bold text-white shadow-md transition hover:bg-red-700 disabled:opacity-60"
               >
                 {saving
                   ? "Saving..."
@@ -765,7 +721,7 @@ function Students({ branch }) {
                 <button
                   type="button"
                   onClick={closeForm}
-                  className="rounded-xl border border-gray-200 bg-gray-100 px-6 py-3 font-bold text-gray-700 transition hover:bg-gray-200"
+                  className="rounded-xl border border-gray-200 bg-gray-100 px-6 py-3 font-bold text-gray-700"
                 >
                   Cancel
                 </button>
@@ -777,28 +733,19 @@ function Students({ branch }) {
         </div>
       )}
 
-      {/* SEARCH */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
 
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 
-          <div className="relative w-full md:max-w-md">
-
-            <input
-              type="search"
-              value={search}
-              onChange={(e) =>
-                setSearch(e.target.value)
-              }
-              placeholder={`Search ${branch} student...`}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 pl-11 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
-            />
-
-            <span className="absolute left-4 top-1/2 -translate-y-1/2">
-              🔍
-            </span>
-
-          </div>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) =>
+              setSearch(e.target.value)
+            }
+            placeholder={`Search ${branch} student...`}
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-blue-600 md:max-w-md"
+          />
 
           <div className="rounded-xl bg-blue-50 px-4 py-2.5">
             <span className="text-sm font-bold text-blue-700">
@@ -813,7 +760,6 @@ function Students({ branch }) {
         </div>
       </div>
 
-      {/* TABLE */}
       <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
 
         <div className="overflow-x-auto">
@@ -821,8 +767,8 @@ function Students({ branch }) {
           <table className="w-full min-w-[1150px] text-left">
 
             <thead className="border-b border-gray-200 bg-gray-50">
-              <tr>
 
+              <tr>
                 <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
                   Student ID
                 </th>
@@ -854,8 +800,8 @@ function Students({ branch }) {
                 <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
                   Action
                 </th>
-
               </tr>
+
             </thead>
 
             <tbody className="divide-y divide-gray-100">
@@ -866,9 +812,7 @@ function Students({ branch }) {
                     colSpan="8"
                     className="px-5 py-14 text-center"
                   >
-                    <p className="font-bold text-gray-700">
-                      Loading students...
-                    </p>
+                    Loading students...
                   </td>
                 </tr>
               ) : filteredStudents.length === 0 ? (
@@ -884,10 +828,6 @@ function Students({ branch }) {
                     <p className="mt-3 font-bold text-gray-800">
                       No students found
                     </p>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                      Click "Add Student" to register a student.
-                    </p>
                   </td>
                 </tr>
               ) : (
@@ -901,50 +841,40 @@ function Students({ branch }) {
                       className="transition hover:bg-gray-50"
                     >
 
-                      {/* ID */}
                       <td className="px-5 py-4">
                         <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
                           {student.id}
                         </span>
                       </td>
 
-                      {/* STUDENT */}
                       <td className="px-5 py-4">
                         <p className="font-bold text-gray-900">
                           {student.name}
                         </p>
                       </td>
 
-                      {/* EMAIL */}
                       <td className="px-5 py-4">
                         <p className="text-sm font-semibold text-gray-700">
                           {student.email || "—"}
                         </p>
                       </td>
 
-                      {/* FATHER */}
                       <td className="px-5 py-4 text-sm text-gray-600">
                         {student.fatherName}
                       </td>
 
-                      {/* CLASS */}
                       <td className="px-5 py-4">
-                        <span className="font-semibold text-gray-800">
-                          {student.className}
-                        </span>
+                        {student.className}
                       </td>
 
-                      {/* STREAM */}
                       <td className="px-5 py-4 text-sm">
                         {student.stream || "—"}
                       </td>
 
-                      {/* MOBILE */}
                       <td className="px-5 py-4 text-sm text-gray-600">
                         {student.mobile}
                       </td>
 
-                      {/* ACTION */}
                       <td className="px-5 py-4">
 
                         <div className="flex gap-2">
@@ -953,7 +883,7 @@ function Students({ branch }) {
                             onClick={() =>
                               editStudent(student)
                             }
-                            className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
+                            className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-600"
                           >
                             Edit
                           </button>
@@ -965,7 +895,7 @@ function Students({ branch }) {
                                 student.id
                               )
                             }
-                            className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100"
+                            className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600"
                           >
                             Delete
                           </button>
@@ -984,21 +914,6 @@ function Students({ branch }) {
           </table>
 
         </div>
-      </div>
-
-      {/* INFORMATION */}
-      <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-5">
-
-        <p className="text-sm font-bold text-blue-700">
-          ℹ️ {branch} Branch
-        </p>
-
-        <p className="mt-1 text-sm leading-6 text-gray-600">
-          Student information Firebase
-          Firestore में automatically save होगी।
-          Add, Edit और Delete करने पर Firebase
-          database भी update होगा।
-        </p>
 
       </div>
 

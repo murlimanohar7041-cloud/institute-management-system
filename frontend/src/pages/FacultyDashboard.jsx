@@ -7,7 +7,6 @@ import {
   where,
   addDoc,
   updateDoc,
-  deleteDoc,
   doc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -197,20 +196,6 @@ export default function FacultyDashboard() {
       alert("Student update nahi hua.");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleDeleteStudent = async (student) => {
-    const ok = window.confirm(`Kya aap ${student.name || "is student"} ko delete karna chahte hain?`);
-    if (!ok) return;
-    try {
-      await deleteDoc(doc(db, "students", student.id));
-      setSelectedStudent(null);
-      alert("Student deleted successfully.");
-      await loadAllData();
-    } catch (error) {
-      console.error(error);
-      alert("Student delete nahi hua.");
     }
   };
 
@@ -787,12 +772,7 @@ export default function FacultyDashboard() {
           border: none; background: #f59e0b; color: white; padding: 7px 11px;
           border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 600;
         }
-        .faculty-delete-btn {
-          border: none; background: #dc2626; color: white; padding: 7px 11px;
-          border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 600;
-        }
-
-        .faculty-view-btn {
+.faculty-view-btn {
           border: none;
           background: #2563eb;
           color: white;
@@ -1558,13 +1538,7 @@ export default function FacultyDashboard() {
                                 >
                                   Edit
                                 </button>
-                                <button
-                                  type="button"
-                                  className="faculty-delete-btn"
-                                  onClick={() => handleDeleteStudent(student)}
-                                >
-                                  Delete
-                                </button>
+
                               </div>
                             </td>
                           </tr>
@@ -1593,7 +1567,7 @@ export default function FacultyDashboard() {
 
                     <div className="faculty-detail-grid">
                       <div><span>Name</span><strong>{selectedStudent.name || "-"}</strong></div>
-                      <div><span>Father Name</span><strong>{selectedStudent.fatherName || "-"}</strong></div>
+                      <div><span>Father Name</span><strong>{selectedStudent.fatherName || selectedStudent.father || selectedStudent.father_name || "-"}</strong></div>
                       <div><span>Email</span><strong>{selectedStudent.email || "-"}</strong></div>
                       <div><span>Mobile</span><strong>{selectedStudent.mobile || "-"}</strong></div>
                       <div><span>Class</span><strong>{selectedStudent.className || "-"}</strong></div>
