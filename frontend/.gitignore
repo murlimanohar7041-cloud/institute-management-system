@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local backups / downloaded files
+frontend/src_backup/
+frontend/src.zip
+
+# AI tool generated files
+frontend/.agents/
+frontend/.claude/
+frontend/skills-lock.json
+
+# Local Firebase configuration / functions
+frontend/functions/
+frontend/.firebaserc
+frontend/firebase.json
+
+# Dependencies
+node_modules/
