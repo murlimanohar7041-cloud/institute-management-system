@@ -1,42 +1,231 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { onAuthStateChanged } from "firebase/auth"
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore"
+
+import { auth, db } from "../firebase"
 
 function StudentDashboard({ branch }) {
-  // =========================
-  // LOAD STUDENTS
-  // =========================
-  const students = useMemo(() => {
-    try {
-      const savedStudents = localStorage.getItem("students")
-      return savedStudents ? JSON.parse(savedStudents) : []
-    } catch (error) {
-      console.error("Error loading students:", error)
-      return []
-    }
-  }, [])
+  const [students, setStudents] = useState([])
+  const [fees, setFees] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
-  // =========================
-  // LOAD FEES
-  // =========================
-  const fees = useMemo(() => {
-    try {
-      const savedFees = localStorage.getItem("fees")
-      return savedFees ? JSON.parse(savedFees) : []
-    } catch (error) {
-      console.error("Error loading fees:", error)
-      return []
-    }
-  }, [])
-
-  // =========================
-  // STATES
-  // =========================
   const [search, setSearch] = useState("")
   const [classFilter, setClassFilter] = useState("All")
   const [selectedStudent, setSelectedStudent] = useState(null)
 
   // =========================
+  // LOAD FIREBASE DATA
+  // =========================
+
+  useEffect(() => {
+    let unsubscribe = null
+
+    const loadData = async (user) => {
+      try {
+        setLoading(true)
+        setError("")
+
+        const email = user?.email?.trim().toLowerCase()
+
+        // -------------------------
+        // LOAD STUDENTS
+        // -------------------------
+
+        const studentsSnapshot = await getDocs(
+          collection(db, "students")
+        )
+
+        const firestoreStudents = studentsSnapshot.docs.map((item) => ({
+          firestoreId: item.id,
+          ...item.data(),
+        }))
+
+        setStudents(firestoreStudents)
+
+        // -------------------------
+        // LOAD FEES
+        // -------------------------
+
+        const feesSnapshot = await getDocs(
+          collection(db, "fees")
+        )
+
+        const firestoreFees = feesSnapshot.docs.map((item) => ({
+          firestoreId: item.id,
+          ...item.data(),
+        }))
+
+        setFees(firestoreFees)
+
+        // -------------------------
+        // AUTO OPEN LOGGED-IN STUDENT
+        // -------------------------
+
+        if (email) {
+          const loggedInStudent = firestoreStudents.find(
+            (student) =>
+              student.email?.trim().toLowerCase() === email &&
+              (!branch || student.branch === branch)
+          )
+
+          if (loggedInStudent) {
+            setSelectedStudent(loggedInStudent)
+          }
+        }
+      } catch (err) {
+        console.error("StudentDashboard Firebase Error:", err)
+        setError(
+          "Firebase data load nahi ho pa raha hai. Please check Firebase connection."
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setLoading(false)
+        setError("Student login nahi hai.")
+        return
+      }
+
+      loadData(user)
+    })
+
+    return () => {
+      if (unsubscribe) unsubscribe()
+    }
+  }, [branch])
+
+  // =========================
+  // CURRENT BRANCH STUDENTS
+  // =========================
+
+  const branchStudents = useMemo(() => {
+    if (!branch) return students
+
+    return students.filter(
+      (student) => student.branch === branch
+    )
+  }, [students, branch])
+
+  // =========================
+  // FILTER STUDENTS
+  // =========================
+
+  const filteredStudents = useMemo(() => {
+    return branchStudents.filter((student) => {
+      const classMatch =
+        classFilter === "All" ||
+        student.className === classFilter
+
+      const text = `
+        ${student.studentId || ""}
+        ${student.id || ""}
+        ${student.name || ""}
+        ${student.email || ""}
+        ${student.fatherName || ""}
+        ${student.mobile || ""}
+        ${student.className || ""}
+        ${student.stream || ""}
+        ${student.branch || ""}
+      `
+
+      const searchMatch = text
+        .toLowerCase()
+        .includes(search.toLowerCase())
+
+      return classMatch && searchMatch
+    })
+  }, [branchStudents, classFilter, search])
+
+  // =========================
+  // CLASS COUNT
+  // =========================
+
+  const getClassCount = (className) => {
+    return branchStudents.filter(
+      (student) => student.className === className
+    ).length
+  }
+
+  // =========================
+  // STUDENT EMAIL
+  // =========================
+
+  const getStudentEmail = (student) => {
+    return student?.email?.trim().toLowerCase() || ""
+  }
+
+  // =========================
+  // STUDENT FEES
+  // =========================
+
+  const getStudentFees = (student) => {
+    if (!student) return []
+
+    const studentEmail = getStudentEmail(student)
+
+    return fees.filter((fee) => {
+      const feeEmail =
+        fee.studentEmail?.trim().toLowerCase() || ""
+
+      const sameEmail =
+        studentEmail &&
+        feeEmail &&
+        studentEmail === feeEmail
+
+      const sameBranch =
+        !branch || fee.branch === branch
+
+      return sameEmail && sameBranch
+    })
+  }
+
+  // =========================
+  // TOTAL PAID
+  // =========================
+
+  const getTotalPaid = (student) => {
+    return getStudentFees(student)
+      .filter(
+        (fee) =>
+          String(fee.status).toLowerCase() === "paid"
+      )
+      .reduce(
+        (total, fee) =>
+          total + Number(fee.amount || 0),
+        0
+      )
+  }
+
+  // =========================
+  // TOTAL PENDING
+  // =========================
+
+  const getTotalPending = (student) => {
+    return getStudentFees(student)
+      .filter(
+        (fee) =>
+          String(fee.status).toLowerCase() === "pending"
+      )
+      .reduce(
+        (total, fee) =>
+          total + Number(fee.amount || 0),
+        0
+      )
+  }
+
+  // =========================
   // FEE STRUCTURE
   // =========================
+
   const getFeeStructure = (student) => {
     if (!student) {
       return {
@@ -106,101 +295,76 @@ function StudentDashboard({ branch }) {
   }
 
   // =========================
-  // CURRENT BRANCH STUDENTS
+  // LOADING
   // =========================
-  const branchStudents = students.filter(
-    (student) => student.branch === branch
-  )
 
-  // =========================
-  // FILTER STUDENTS
-  // =========================
-  const filteredStudents = branchStudents.filter((student) => {
-    const classMatch =
-      classFilter === "All" ||
-      student.className === classFilter
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
+        <div className="rounded-2xl border border-gray-200 bg-white px-8 py-10 text-center shadow-sm">
+          <div className="text-4xl">⏳</div>
 
-    const text = `
-      ${student.id}
-      ${student.name}
-      ${student.fatherName}
-      ${student.mobile}
-      ${student.className}
-      ${student.stream || ""}
-    `
+          <h2 className="mt-4 text-xl font-extrabold text-gray-900">
+            Loading Student Dashboard...
+          </h2>
 
-    const searchMatch = text
-      .toLowerCase()
-      .includes(search.toLowerCase())
-
-    return classMatch && searchMatch
-  })
-
-  // =========================
-  // CLASS COUNT
-  // =========================
-  const getClassCount = (className) => {
-    return branchStudents.filter(
-      (student) => student.className === className
-    ).length
-  }
-
-  // =========================
-  // STUDENT FEES
-  // =========================
-  const getStudentFees = (studentId) => {
-    return fees.filter(
-      (fee) =>
-        fee.studentId === studentId &&
-        fee.branch === branch
+          <p className="mt-2 text-sm text-gray-500">
+            Firebase se student data load ho raha hai.
+          </p>
+        </div>
+      </div>
     )
   }
 
-  const getTotalPaid = (studentId) => {
-    return getStudentFees(studentId)
-      .filter((fee) => fee.status === "Paid")
-      .reduce(
-        (total, fee) => total + Number(fee.amount || 0),
-        0
-      )
-  }
+  // =========================
+  // ERROR
+  // =========================
 
-  const getTotalPending = (studentId) => {
-    return getStudentFees(studentId)
-      .filter((fee) => fee.status === "Pending")
-      .reduce(
-        (total, fee) => total + Number(fee.amount || 0),
-        0
-      )
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
+        <div className="max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+          <div className="text-4xl">⚠️</div>
+
+          <h2 className="mt-4 text-xl font-extrabold text-gray-900">
+            Dashboard Error
+          </h2>
+
+          <p className="mt-2 text-sm text-red-600">
+            {error}
+          </p>
+        </div>
+      </div>
+    )
   }
 
   // =========================
   // SELECTED STUDENT DATA
   // =========================
-  const selectedFees = selectedStudent
-    ? getStudentFees(selectedStudent.id)
-    : []
 
-  const selectedPaid = selectedStudent
-    ? getTotalPaid(selectedStudent.id)
-    : 0
-
-  const selectedPending = selectedStudent
-    ? getTotalPending(selectedStudent.id)
-    : 0
-
-  const selectedStructure = selectedStudent
-    ? getFeeStructure(selectedStudent)
-    : null
-
-  // =========================
-  // VIEW DASHBOARD
-  // =========================
   if (selectedStudent) {
+    const selectedFees =
+      getStudentFees(selectedStudent)
+
+    const selectedPaid =
+      getTotalPaid(selectedStudent)
+
+    const selectedPending =
+      getTotalPending(selectedStudent)
+
+    const selectedStructure =
+      getFeeStructure(selectedStudent)
+
+    const studentId =
+      selectedStudent.studentId ||
+      selectedStudent.id ||
+      selectedStudent.firestoreId
+
     return (
       <div className="min-h-screen bg-gray-50 p-5 sm:p-7 lg:p-8">
 
         {/* HEADER */}
+
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
           <div>
@@ -223,9 +387,11 @@ function StudentDashboard({ branch }) {
           >
             ← Back to Students
           </button>
+
         </div>
 
-        {/* STUDENT PROFILE */}
+        {/* PROFILE */}
+
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
 
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
@@ -239,6 +405,7 @@ function StudentDashboard({ branch }) {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 
                 <div>
+
                   <h2 className="text-2xl font-extrabold text-gray-950">
                     {selectedStudent.name}
                   </h2>
@@ -246,13 +413,14 @@ function StudentDashboard({ branch }) {
                   <p className="mt-1 text-sm text-gray-500">
                     Student ID:{" "}
                     <span className="font-bold text-blue-700">
-                      {selectedStudent.id}
+                      {studentId}
                     </span>
                   </p>
+
                 </div>
 
                 <span className="w-fit rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">
-                  {branch}
+                  {selectedStudent.branch || branch || "—"}
                 </span>
 
               </div>
@@ -262,72 +430,60 @@ function StudentDashboard({ branch }) {
           </div>
 
           {/* DETAILS */}
+
           <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
-            <div className="rounded-xl bg-gray-50 p-4">
-              <p className="text-xs font-bold uppercase text-gray-400">
-                Student ID
-              </p>
+            <InfoBox
+              label="Student ID"
+              value={studentId}
+            />
 
-              <p className="mt-1 font-extrabold text-gray-900">
-                {selectedStudent.id}
-              </p>
-            </div>
+            <InfoBox
+              label="Student Name"
+              value={selectedStudent.name}
+            />
 
-            <div className="rounded-xl bg-gray-50 p-4">
-              <p className="text-xs font-bold uppercase text-gray-400">
-                Student Name
-              </p>
+            <InfoBox
+              label="Father's Name"
+              value={selectedStudent.fatherName}
+            />
 
-              <p className="mt-1 font-extrabold text-gray-900">
-                {selectedStudent.name}
-              </p>
-            </div>
+            <InfoBox
+              label="Email"
+              value={selectedStudent.email}
+            />
 
-            <div className="rounded-xl bg-gray-50 p-4">
-              <p className="text-xs font-bold uppercase text-gray-400">
-                Father's Name
-              </p>
+            <InfoBox
+              label="Mobile"
+              value={selectedStudent.mobile}
+            />
 
-              <p className="mt-1 font-extrabold text-gray-900">
-                {selectedStudent.fatherName}
-              </p>
-            </div>
+            <InfoBox
+              label="Class"
+              value={selectedStudent.className}
+            />
 
-            <div className="rounded-xl bg-gray-50 p-4">
-              <p className="text-xs font-bold uppercase text-gray-400">
-                Mobile
-              </p>
+            <InfoBox
+              label="Stream"
+              value={selectedStudent.stream || "—"}
+            />
 
-              <p className="mt-1 font-extrabold text-gray-900">
-                {selectedStudent.mobile}
-              </p>
-            </div>
+            <InfoBox
+              label="Branch"
+              value={selectedStudent.branch || branch || "—"}
+            />
 
-            <div className="rounded-xl bg-gray-50 p-4">
-              <p className="text-xs font-bold uppercase text-gray-400">
-                Class
-              </p>
-
-              <p className="mt-1 font-extrabold text-gray-900">
-                {selectedStudent.className}
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-gray-50 p-4">
-              <p className="text-xs font-bold uppercase text-gray-400">
-                Stream
-              </p>
-
-              <p className="mt-1 font-extrabold text-gray-900">
-                {selectedStudent.stream || "—"}
-              </p>
-            </div>
+            <InfoBox
+              label="Status"
+              value={selectedStudent.status || "approved"}
+            />
 
           </div>
+
         </div>
 
         {/* FEE STRUCTURE */}
+
         <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-5 shadow-sm sm:p-7">
 
           <p className="text-sm font-bold text-blue-600">
@@ -337,16 +493,20 @@ function StudentDashboard({ branch }) {
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
             <div>
+
               <h2 className="text-xl font-extrabold text-gray-950">
                 {selectedStudent.className}
+
                 {selectedStudent.stream
                   ? ` — ${selectedStudent.stream}`
                   : ""}
               </h2>
 
               <p className="mt-1 text-sm text-gray-500">
-                Applicable fee: {selectedStructure.label}
+                Applicable fee:{" "}
+                {selectedStructure.label}
               </p>
+
             </div>
 
             <div className="text-3xl font-extrabold text-blue-700">
@@ -354,80 +514,56 @@ function StudentDashboard({ branch }) {
             </div>
 
           </div>
+
         </div>
 
         {/* FEE SUMMARY */}
+
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-bold text-gray-500">
-              Applicable Fee
-            </p>
+          <SummaryCard
+            title="Applicable Fee"
+            amount={`₹${selectedStructure.amount}`}
+            note={selectedStructure.type}
+          />
 
-            <p className="mt-2 text-3xl font-extrabold text-gray-950">
-              ₹{selectedStructure.amount}
-            </p>
+          <SummaryCard
+            title="Paid"
+            amount={`₹${selectedPaid}`}
+            note="Total paid"
+            type="paid"
+          />
 
-            <p className="mt-1 text-xs text-gray-500">
-              {selectedStructure.type}
-            </p>
-          </div>
+          <SummaryCard
+            title="Pending"
+            amount={`₹${selectedPending}`}
+            note="Pending payments"
+            type="pending"
+          />
 
-          <div className="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
-            <p className="text-sm font-bold text-green-600">
-              Paid
-            </p>
-
-            <p className="mt-2 text-3xl font-extrabold text-green-700">
-              ₹{selectedPaid}
-            </p>
-
-            <p className="mt-1 text-xs text-green-600">
-              Total paid
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
-            <p className="text-sm font-bold text-red-600">
-              Pending
-            </p>
-
-            <p className="mt-2 text-3xl font-extrabold text-red-700">
-              ₹{selectedPending}
-            </p>
-
-            <p className="mt-1 text-xs text-red-600">
-              Pending payments
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-            <p className="text-sm font-bold text-blue-600">
-              Payments
-            </p>
-
-            <p className="mt-2 text-3xl font-extrabold text-blue-700">
-              {selectedFees.length}
-            </p>
-
-            <p className="mt-1 text-xs text-blue-600">
-              Fee records
-            </p>
-          </div>
+          <SummaryCard
+            title="Fee Records"
+            amount={selectedFees.length}
+            note="Total records"
+            type="records"
+          />
 
         </div>
 
         {/* PAYMENT HISTORY */}
+
         <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
 
           <div className="border-b border-gray-200 p-5 sm:p-6">
+
             <h2 className="text-xl font-extrabold text-gray-950">
               Payment History
             </h2>
 
             <p className="mt-1 text-sm text-gray-500">
-              All fee records of this student.
+              Fee records saved by Admin.
             </p>
+
           </div>
 
           <div className="overflow-x-auto">
@@ -447,15 +583,15 @@ function StudentDashboard({ branch }) {
                   </th>
 
                   <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
+                    Month
+                  </th>
+
+                  <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
                     Amount
                   </th>
 
                   <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
                     Status
-                  </th>
-
-                  <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
-                    Note
                   </th>
 
                 </tr>
@@ -467,22 +603,26 @@ function StudentDashboard({ branch }) {
                 {selectedFees.length === 0 ? (
 
                   <tr>
+
                     <td
                       colSpan="5"
                       className="px-5 py-12 text-center"
                     >
+
                       <div className="text-4xl">
                         💰
                       </div>
 
                       <p className="mt-3 font-bold text-gray-800">
-                        No payment records
+                        No fee records
                       </p>
 
                       <p className="mt-1 text-sm text-gray-500">
-                        Payment records will appear here after payment.
+                        Admin ke fees section se record add hone ke baad yahan dikhega.
                       </p>
+
                     </td>
+
                   </tr>
 
                 ) : (
@@ -490,22 +630,28 @@ function StudentDashboard({ branch }) {
                   selectedFees.map((fee) => (
 
                     <tr
-                      key={fee.id}
+                      key={fee.firestoreId}
                       className="transition hover:bg-gray-50"
                     >
 
                       <td className="px-5 py-4">
+
                         <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
-                          {fee.id}
+                          {fee.feeId || fee.firestoreId}
                         </span>
+
                       </td>
 
                       <td className="px-5 py-4 text-sm text-gray-600">
-                        {fee.date}
+                        {fee.date || "—"}
+                      </td>
+
+                      <td className="px-5 py-4 text-sm font-semibold text-gray-700">
+                        {fee.month || "—"}
                       </td>
 
                       <td className="px-5 py-4 font-extrabold text-gray-900">
-                        ₹{fee.amount}
+                        ₹{Number(fee.amount || 0).toLocaleString("en-IN")}
                       </td>
 
                       <td className="px-5 py-4">
@@ -517,13 +663,9 @@ function StudentDashboard({ branch }) {
                               : "bg-red-100 text-red-700"
                           }`}
                         >
-                          {fee.status}
+                          {fee.status || "Pending"}
                         </span>
 
-                      </td>
-
-                      <td className="px-5 py-4 text-sm text-gray-500">
-                        {fee.note || "—"}
                       </td>
 
                     </tr>
@@ -540,21 +682,6 @@ function StudentDashboard({ branch }) {
 
         </div>
 
-        {/* FUTURE PAYMENT SECTION */}
-        <div className="mt-6 rounded-2xl border border-yellow-200 bg-yellow-50 p-5">
-
-          <p className="text-sm font-bold text-yellow-700">
-            💡 Next Step
-          </p>
-
-          <p className="mt-1 text-sm leading-6 text-gray-600">
-            Isi student dashboard se next step me payment
-            system connect kiya jayega. Payment ke baad
-            automatic receipt generate aur print ki ja sakegi.
-          </p>
-
-        </div>
-
       </div>
     )
   }
@@ -562,13 +689,16 @@ function StudentDashboard({ branch }) {
   // =========================
   // STUDENT LIST
   // =========================
+
   return (
     <div className="min-h-screen bg-gray-50 p-5 sm:p-7 lg:p-8">
 
       {/* HEADER */}
+
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 
         <div>
+
           <p className="text-sm font-semibold text-blue-600">
             Student Management
           </p>
@@ -580,6 +710,7 @@ function StudentDashboard({ branch }) {
           <p className="mt-1 text-sm text-gray-500">
             View complete student information and fee details.
           </p>
+
         </div>
 
         <div className="rounded-xl bg-blue-50 px-4 py-3">
@@ -589,7 +720,7 @@ function StudentDashboard({ branch }) {
           </p>
 
           <p className="font-extrabold text-blue-700">
-            {branch}
+            {branch || "All Branches"}
           </p>
 
         </div>
@@ -597,57 +728,26 @@ function StudentDashboard({ branch }) {
       </div>
 
       {/* CLASS SUMMARY */}
+
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
 
-        <button
+        <ClassCard
+          title="All Students"
+          count={branchStudents.length}
+          active={classFilter === "All"}
           onClick={() => setClassFilter("All")}
-          className={`rounded-2xl border p-5 text-left shadow-sm transition ${
-            classFilter === "All"
-              ? "border-blue-500 bg-blue-50"
-              : "border-gray-200 bg-white"
-          }`}
-        >
-
-          <p className="text-sm font-bold text-gray-500">
-            All Students
-          </p>
-
-          <p className="mt-2 text-3xl font-extrabold text-gray-950">
-            {branchStudents.length}
-          </p>
-
-          <p className="mt-1 text-xs text-gray-500">
-            Students
-          </p>
-
-        </button>
+        />
 
         {["9th", "10th", "11th", "12th"].map(
           (className) => (
 
-            <button
+            <ClassCard
               key={className}
+              title={`Class ${className}`}
+              count={getClassCount(className)}
+              active={classFilter === className}
               onClick={() => setClassFilter(className)}
-              className={`rounded-2xl border p-5 text-left shadow-sm transition ${
-                classFilter === className
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-200 bg-white"
-              }`}
-            >
-
-              <p className="text-sm font-bold text-gray-500">
-                Class {className}
-              </p>
-
-              <p className="mt-2 text-3xl font-extrabold text-gray-950">
-                {getClassCount(className)}
-              </p>
-
-              <p className="mt-1 text-xs text-gray-500">
-                Students
-              </p>
-
-            </button>
+            />
 
           )
         )}
@@ -655,6 +755,7 @@ function StudentDashboard({ branch }) {
       </div>
 
       {/* SEARCH */}
+
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
 
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -664,8 +765,12 @@ function StudentDashboard({ branch }) {
             <input
               type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={`Search ${branch} student...`}
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
+              placeholder={`Search ${
+                branch || ""
+              } student...`}
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 pl-11 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
             />
 
@@ -678,11 +783,15 @@ function StudentDashboard({ branch }) {
           <div className="rounded-xl bg-blue-50 px-4 py-2.5">
 
             <span className="text-sm font-bold text-blue-700">
-              {branch} •{" "}
+
+              {branch || "All Branches"} •{" "}
+
               {classFilter === "All"
                 ? "All Classes"
                 : `Class ${classFilter}`}
+
               : {filteredStudents.length}
+
             </span>
 
           </div>
@@ -692,6 +801,7 @@ function StudentDashboard({ branch }) {
       </div>
 
       {/* STUDENT CARDS */}
+
       <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
 
         {filteredStudents.length === 0 ? (
@@ -716,17 +826,29 @@ function StudentDashboard({ branch }) {
 
           filteredStudents.map((student) => {
 
-            const paid = getTotalPaid(student.id)
-            const pending = getTotalPending(student.id)
-            const structure = getFeeStructure(student)
+            const studentId =
+              student.studentId ||
+              student.id ||
+              student.firestoreId
+
+            const paid =
+              getTotalPaid(student)
+
+            const pending =
+              getTotalPending(student)
+
+            const structure =
+              getFeeStructure(student)
 
             return (
+
               <div
-                key={student.id}
+                key={student.firestoreId || student.id}
                 className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
               >
 
                 {/* CARD HEADER */}
+
                 <div className="flex items-start justify-between gap-3">
 
                   <div className="flex items-center gap-3">
@@ -742,7 +864,7 @@ function StudentDashboard({ branch }) {
                       </h3>
 
                       <p className="mt-1 text-xs font-bold text-blue-600">
-                        {student.id}
+                        {studentId}
                       </p>
 
                     </div>
@@ -756,29 +878,35 @@ function StudentDashboard({ branch }) {
                 </div>
 
                 {/* INFO */}
+
                 <div className="mt-5 space-y-2">
 
                   <div className="flex justify-between gap-3 text-sm">
+
                     <span className="text-gray-500">
                       Father's Name
                     </span>
 
                     <span className="font-bold text-gray-800">
-                      {student.fatherName}
+                      {student.fatherName || "—"}
                     </span>
+
                   </div>
 
                   <div className="flex justify-between gap-3 text-sm">
+
                     <span className="text-gray-500">
                       Mobile
                     </span>
 
                     <span className="font-bold text-gray-800">
-                      {student.mobile}
+                      {student.mobile || "—"}
                     </span>
+
                   </div>
 
                   <div className="flex justify-between gap-3 text-sm">
+
                     <span className="text-gray-500">
                       Stream
                     </span>
@@ -786,14 +914,16 @@ function StudentDashboard({ branch }) {
                     <span className="font-bold text-gray-800">
                       {student.stream || "—"}
                     </span>
+
                   </div>
 
                 </div>
 
                 {/* FEE */}
+
                 <div className="mt-5 rounded-xl bg-gray-50 p-4">
 
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-3">
 
                     <span className="text-xs font-bold text-gray-500">
                       Applicable Fee
@@ -808,6 +938,7 @@ function StudentDashboard({ branch }) {
                   <div className="mt-3 grid grid-cols-2 gap-3">
 
                     <div>
+
                       <p className="text-xs text-gray-500">
                         Paid
                       </p>
@@ -815,9 +946,11 @@ function StudentDashboard({ branch }) {
                       <p className="mt-1 font-extrabold text-green-600">
                         ₹{paid}
                       </p>
+
                     </div>
 
                     <div>
+
                       <p className="text-xs text-gray-500">
                         Pending
                       </p>
@@ -825,6 +958,7 @@ function StudentDashboard({ branch }) {
                       <p className="mt-1 font-extrabold text-red-600">
                         ₹{pending}
                       </p>
+
                     </div>
 
                   </div>
@@ -832,14 +966,18 @@ function StudentDashboard({ branch }) {
                 </div>
 
                 {/* BUTTON */}
+
                 <button
-                  onClick={() => setSelectedStudent(student)}
+                  onClick={() =>
+                    setSelectedStudent(student)
+                  }
                   className="mt-5 w-full rounded-xl bg-blue-700 px-4 py-3 font-bold text-white transition hover:bg-blue-800"
                 >
                   View Student Dashboard →
                 </button>
 
               </div>
+
             )
           })
 
@@ -848,6 +986,7 @@ function StudentDashboard({ branch }) {
       </div>
 
       {/* INFO */}
+
       <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-5">
 
         <p className="text-sm font-bold text-blue-700">
@@ -855,16 +994,108 @@ function StudentDashboard({ branch }) {
         </p>
 
         <p className="mt-1 text-sm leading-6 text-gray-600">
-          Registered students automatically यहाँ दिखाई देंगे।
-          किसी student के "View Student Dashboard" पर click
-          करके उसकी complete information, fee structure,
-          paid amount, pending amount और payment history देख
-          सकते हैं।
+          Students aur fees ab Firebase Firestore se
+          load ho rahe hain. Admin ke Fees section me
+          add kiya gaya record yahan student ke email
+          aur branch ke basis par automatically match hoga.
         </p>
 
       </div>
 
     </div>
+  )
+}
+
+// =========================
+// SMALL COMPONENTS
+// =========================
+
+function InfoBox({ label, value }) {
+  return (
+    <div className="rounded-xl bg-gray-50 p-4">
+
+      <p className="text-xs font-bold uppercase text-gray-400">
+        {label}
+      </p>
+
+      <p className="mt-1 break-words font-extrabold text-gray-900">
+        {value || "—"}
+      </p>
+
+    </div>
+  )
+}
+
+function SummaryCard({
+  title,
+  amount,
+  note,
+  type = "default",
+}) {
+  const classes = {
+    default:
+      "border-gray-200 bg-white text-gray-950",
+
+    paid:
+      "border-green-200 bg-green-50 text-green-700",
+
+    pending:
+      "border-red-200 bg-red-50 text-red-700",
+
+    records:
+      "border-blue-200 bg-blue-50 text-blue-700",
+  }
+
+  return (
+    <div
+      className={`rounded-2xl border p-5 shadow-sm ${classes[type]}`}
+    >
+
+      <p className="text-sm font-bold opacity-80">
+        {title}
+      </p>
+
+      <p className="mt-2 text-3xl font-extrabold">
+        {amount}
+      </p>
+
+      <p className="mt-1 text-xs opacity-80">
+        {note}
+      </p>
+
+    </div>
+  )
+}
+
+function ClassCard({
+  title,
+  count,
+  active,
+  onClick,
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-2xl border p-5 text-left shadow-sm transition ${
+        active
+          ? "border-blue-500 bg-blue-50"
+          : "border-gray-200 bg-white"
+      }`}
+    >
+
+      <p className="text-sm font-bold text-gray-500">
+        {title}
+      </p>
+
+      <p className="mt-2 text-3xl font-extrabold text-gray-950">
+        {count}
+      </p>
+
+      <p className="mt-1 text-xs text-gray-500">
+        Students
+      </p>
+
+    </button>
   )
 }
 

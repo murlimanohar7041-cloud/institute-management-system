@@ -21,6 +21,7 @@ import AdminSettings from "./AdminSettings"
 import AdminStudyMaterials from "./AdminStudyMaterials"
 import AdminStudentLocations from "./AdminStudentLocations"
 import AdminNotifications from "./AdminNotifications"
+import FacultyManagement from "./FacultyManagement"
 import AdminStudentNotifications from "./AdminStudentNotifications"
 import { auth, db } from "../firebase"
 
@@ -36,6 +37,28 @@ export default function AdminDashboard() {
 
   // First Firestore load ko notification banne se rokne ke liye
   const firstLoad = useRef(true)
+
+  // Responsive layout state
+  const [isMobile, setIsMobile] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  useEffect(() => {
+    const checkScreen = () => {
+      const mobile = window.innerWidth <= 900
+      setIsMobile(mobile)
+      if (!mobile) setSidebarOpen(false)
+    }
+
+    checkScreen()
+    window.addEventListener("resize", checkScreen)
+
+    return () => window.removeEventListener("resize", checkScreen)
+  }, [])
+
+  const handleMenuClick = (page) => {
+    setActivePage(page)
+    if (isMobile) setSidebarOpen(false)
+  }
 
   // Realtime student -> admin notifications
   useEffect(() => {
@@ -145,6 +168,7 @@ export default function AdminDashboard() {
   const openAdmissionEnquiries = () => {
     setShowEnquiryNotification(false)
     setActivePage("Admission Enquiries")
+    if (isMobile) setSidebarOpen(false)
   }
 
   const menuItems = [
@@ -165,6 +189,7 @@ export default function AdminDashboard() {
       icon: "📝",
       badge: newEnquiries,
     },
+    { name: "Faculty Management", icon: "👨‍🏫" },
     { name: "Settings", icon: "⚙️" },
   ]
 
@@ -201,15 +226,30 @@ export default function AdminDashboard() {
     if (activePage === "Student Notifications")
       return <AdminStudentNotifications branch={branch} />
 
+
+
     if (activePage === "Admission Enquiries")
       return <AdminAdmissions branch={branch} />
+
+    if (activePage === "Faculty Management")
+      return <FacultyManagement />
 
     if (activePage === "Settings")
       return <AdminSettings branch={branch} />
 
     return (
-      <div style={styles.dashboard}>
-        <div style={styles.welcomeCard}>
+      <div
+        style={{
+          ...styles.dashboard,
+          ...(isMobile ? styles.mobileDashboard : {}),
+        }}
+      >
+        <div
+          style={{
+            ...styles.welcomeCard,
+            ...(isMobile ? styles.mobileWelcomeCard : {}),
+          }}
+        >
           <div style={styles.welcomeGlow} />
 
           <div style={{ position: "relative", zIndex: 1 }}>
@@ -227,6 +267,7 @@ export default function AdminDashboard() {
           <div
             style={{
               ...styles.branchBox,
+              ...(isMobile ? styles.mobileBranchBox : {}),
               position: "relative",
               zIndex: 1,
             }}
@@ -244,8 +285,18 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div style={styles.statsGrid}>
-          <div style={styles.statCard}>
+        <div
+          style={{
+            ...styles.statsGrid,
+            ...(isMobile ? styles.mobileStatsGrid : {}),
+          }}
+        >
+          <div
+            style={{
+              ...styles.statCard,
+              ...(isMobile ? styles.mobileStatCard : {}),
+            }}
+          >
             <div style={styles.statIcon}>👨‍🎓</div>
 
             <div>
@@ -254,7 +305,12 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div style={styles.statCard}>
+          <div
+            style={{
+              ...styles.statCard,
+              ...(isMobile ? styles.mobileStatCard : {}),
+            }}
+          >
             <div style={styles.statIcon}>📈</div>
 
             <div>
@@ -263,7 +319,12 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div style={styles.statCard}>
+          <div
+            style={{
+              ...styles.statCard,
+              ...(isMobile ? styles.mobileStatCard : {}),
+            }}
+          >
             <div style={styles.statIcon}>💰</div>
 
             <div>
@@ -275,6 +336,7 @@ export default function AdminDashboard() {
           <div
             style={{
               ...styles.statCard,
+              ...(isMobile ? styles.mobileStatCard : {}),
               cursor: newEnquiries > 0 ? "pointer" : "default",
             }}
             onClick={openAdmissionEnquiries}
@@ -295,8 +357,18 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div style={styles.quickCard}>
-          <div style={styles.sectionHeader}>
+        <div
+          style={{
+            ...styles.quickCard,
+            ...(isMobile ? styles.mobileQuickCard : {}),
+          }}
+        >
+          <div
+            style={{
+              ...styles.sectionHeader,
+              ...(isMobile ? styles.mobileSectionHeader : {}),
+            }}
+          >
             <div>
               <h2>Quick Actions</h2>
 
@@ -314,82 +386,87 @@ export default function AdminDashboard() {
             )}
           </div>
 
-          <div style={styles.quickGrid}>
+          <div
+            style={{
+              ...styles.quickGrid,
+              ...(isMobile ? styles.mobileQuickGrid : {}),
+            }}
+          >
             <button
-              onClick={() => setActivePage("Students")}
-              style={styles.quickButton}
+              onClick={() => handleMenuClick("Students")}
+              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>👨‍🎓</span>
               <span>Manage Students</span>
             </button>
 
             <button
-              onClick={() => setActivePage("Results")}
-              style={styles.quickButton}
+              onClick={() => handleMenuClick("Results")}
+              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>📈</span>
               <span>Manage Results</span>
             </button>
 
             <button
-              onClick={() => setActivePage("Fees")}
-              style={styles.quickButton}
+              onClick={() => handleMenuClick("Fees")}
+              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>💰</span>
               <span>Manage Fees</span>
             </button>
 
             <button
-              onClick={() => setActivePage("Payments")}
-              style={styles.quickButton}
+              onClick={() => handleMenuClick("Payments")}
+              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>💳</span>
               <span>Payments</span>
             </button>
 
             <button
-              onClick={() => setActivePage("Notices")}
-              style={styles.quickButton}
+              onClick={() => handleMenuClick("Notices")}
+              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>📢</span>
               <span>Manage Notices</span>
             </button>
 
             <button
-              onClick={() => setActivePage("Certificates")}
-              style={styles.quickButton}
+              onClick={() => handleMenuClick("Certificates")}
+              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>📜</span>
               <span>Certificates</span>
             </button>
 
             <button
-              onClick={() => setActivePage("Study Materials")}
-              style={styles.quickButton}
+              onClick={() => handleMenuClick("Study Materials")}
+              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>📖</span>
               <span>Study Materials</span>
             </button>
 
             <button
-              onClick={() => setActivePage("Student Locations")}
-              style={styles.quickButton}
+              onClick={() => handleMenuClick("Student Locations")}
+              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>📍</span>
               <span>Student Locations</span>
             </button>
 
             <button
-              onClick={() => setActivePage("Send Notification")}
-              style={styles.notificationButton}
+              onClick={() => handleMenuClick("Send Notification")}
+              style={{ ...styles.notificationButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>🔔</span>
               <span>Send Notification</span>
             </button>
 
             <button
-              onClick={() => setActivePage("Student Notifications")}
-              style={styles.notificationButton}
+              onClick={() => handleMenuClick("Student Notifications")}
+              style={{ ...styles.notificationButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>📨</span>
               <span>Student Notifications</span>
@@ -397,7 +474,7 @@ export default function AdminDashboard() {
 
             <button
               onClick={openAdmissionEnquiries}
-              style={styles.enquiryButton}
+              style={{ ...styles.enquiryButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
             >
               <span>📝</span>
 
@@ -425,7 +502,12 @@ export default function AdminDashboard() {
       {/* ============================= */}
 
       {showEnquiryNotification && (
-        <div style={styles.notificationPopup}>
+        <div
+          style={{
+            ...styles.notificationPopup,
+            ...(isMobile ? styles.mobileNotificationPopup : {}),
+          }}
+        >
           <div style={styles.notificationIcon}>
             🔔
           </div>
@@ -456,7 +538,36 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <aside style={styles.sidebar}>
+      {isMobile && (
+        <>
+          <button
+            type="button"
+            aria-label={sidebarOpen ? "Close menu" : "Open menu"}
+            aria-expanded={sidebarOpen}
+            onClick={() => setSidebarOpen((value) => !value)}
+            style={styles.mobileMenuButton}
+          >
+            {sidebarOpen ? "✕" : "☰"}
+          </button>
+
+          {sidebarOpen && (
+            <button
+              type="button"
+              aria-label="Close navigation overlay"
+              onClick={() => setSidebarOpen(false)}
+              style={styles.sidebarOverlay}
+            />
+          )}
+        </>
+      )}
+
+      <aside
+        style={{
+          ...styles.sidebar,
+          ...(isMobile ? styles.mobileSidebar : {}),
+          ...(isMobile && sidebarOpen ? styles.mobileSidebarOpen : {}),
+        }}
+      >
         <div style={styles.logoArea}>
           <div style={styles.logo}>JS</div>
 
@@ -483,7 +594,7 @@ export default function AdminDashboard() {
           {menuItems.map((item) => (
             <button
               key={item.name}
-              onClick={() => setActivePage(item.name)}
+              onClick={() => handleMenuClick(item.name)}
               style={{
                 ...styles.navItem,
                 ...(activePage === item.name
@@ -529,17 +640,38 @@ export default function AdminDashboard() {
         </div>
       </aside>
 
-      <main style={styles.main}>
-        <header style={styles.header}>
+      <main
+        style={{
+          ...styles.main,
+          ...(isMobile ? styles.mobileMain : {}),
+        }}
+      >
+        <header
+          style={{
+            ...styles.header,
+            ...(isMobile ? styles.mobileHeader : {}),
+          }}
+        >
           <div>
-            <h3>{activePage}</h3>
+            <h3
+              style={isMobile ? { fontSize: "16px", maxWidth: "150px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : undefined}
+            >
+              {activePage}
+            </h3>
 
-            <p>
+            <p
+              style={isMobile ? { fontSize: "10px", marginTop: "2px", whiteSpace: "nowrap" } : undefined}
+            >
               J. Solution Classes • {branch}
             </p>
           </div>
 
-          <div style={styles.headerRight}>
+          <div
+            style={{
+              ...styles.headerRight,
+              ...(isMobile ? styles.mobileHeaderRight : {}),
+            }}
+          >
             <button
               onClick={openAdmissionEnquiries}
               style={styles.headerNotification}
@@ -554,23 +686,35 @@ export default function AdminDashboard() {
               )}
             </button>
 
-            <div style={styles.headerBranch}>
-              <span>🏫</span>
-              <span>Branch:</span>
-              <strong>{branch}</strong>
-            </div>
+            {!isMobile && (
+              <div style={styles.headerBranch}>
+                <span>🏫</span>
+                <span>Branch:</span>
+                <strong>{branch}</strong>
+              </div>
+            )}
 
             <button
               onClick={handleLogout}
-              style={styles.headerLogout}
+              style={{
+                ...styles.headerLogout,
+                ...(isMobile ? { padding: "9px 10px", fontSize: "11px" } : {}),
+              }}
             >
-              🚪 Logout
+              {isMobile ? "🚪" : "🚪 Logout"}
             </button>
           </div>
         </header>
 
-        <section style={styles.content}>
-          {renderPage()}
+        <section
+          style={{
+            ...styles.content,
+            ...(isMobile ? styles.mobileContent : {}),
+          }}
+        >
+          <div style={styles.pageViewport}>
+            {renderPage()}
+          </div>
         </section>
       </main>
     </div>
@@ -1233,5 +1377,155 @@ const styles = {
     justifyContent: "center",
     fontSize: "11px",
     fontWeight: "900",
+  },
+
+  mobileMenuButton: {
+    position: "fixed",
+    top: "12px",
+    left: "12px",
+    zIndex: 2201,
+    width: "44px",
+    height: "44px",
+    borderRadius: "12px",
+    border: "1px solid #dce4f0",
+    background: "#ffffff",
+    color: "#173f91",
+    fontSize: "22px",
+    fontWeight: "900",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 8px 24px rgba(20,40,80,0.14)",
+  },
+
+  sidebarOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 2000,
+    width: "100%",
+    height: "100%",
+    border: 0,
+    padding: 0,
+    margin: 0,
+    background: "rgba(15,23,42,0.46)",
+    cursor: "pointer",
+  },
+
+  mobileSidebar: {
+    width: "min(310px, 86vw)",
+    minWidth: "0",
+    transform: "translateX(-105%)",
+    zIndex: 2100,
+    transition: "transform 0.25s ease",
+    boxShadow: "18px 0 45px rgba(15,23,42,0.18)",
+  },
+
+  mobileSidebarOpen: {
+    transform: "translateX(0)",
+  },
+
+  mobileMain: {
+    marginLeft: 0,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+  },
+
+  mobileHeader: {
+    minHeight: "68px",
+    padding: "10px 12px 10px 68px",
+    gap: "8px",
+    position: "sticky",
+    top: 0,
+    zIndex: 1000,
+  },
+
+  mobileHeaderRight: {
+    gap: "6px",
+    flexShrink: 0,
+  },
+
+  mobileContent: {
+    padding: "14px",
+    overflowX: "hidden",
+  },
+
+  pageViewport: {
+    width: "100%",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflowX: "auto",
+    boxSizing: "border-box",
+    WebkitOverflowScrolling: "touch",
+  },
+
+  mobileDashboard: {
+    width: "100%",
+    maxWidth: "100%",
+  },
+
+  mobileWelcomeCard: {
+    padding: "20px",
+    borderRadius: "16px",
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: "16px",
+  },
+
+  mobileBranchBox: {
+    minWidth: "0",
+    maxWidth: "100%",
+    width: "100%",
+  },
+
+  mobileStatsGrid: {
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "10px",
+    marginTop: "14px",
+  },
+
+  mobileStatCard: {
+    padding: "13px",
+    gap: "10px",
+    borderRadius: "13px",
+  },
+
+  mobileQuickButton: {
+    minHeight: "52px",
+    padding: "12px",
+    gap: "8px",
+    fontSize: "12px",
+    borderRadius: "11px",
+  },
+
+  mobileQuickCard: {
+    marginTop: "14px",
+    padding: "17px",
+    borderRadius: "16px",
+  },
+
+  mobileSingleColumn: {
+    gridTemplateColumns: "1fr",
+  },
+
+  mobileQuickGrid: {
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "10px",
+  },
+
+  mobileSectionHeader: {
+    alignItems: "stretch",
+    flexDirection: "column",
+    gap: "10px",
+  },
+
+  mobileNotificationPopup: {
+    top: "68px",
+    left: "12px",
+    right: "12px",
+    width: "auto",
+    maxWidth: "none",
+    padding: "13px",
   },
 }

@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react"
-import { collection, onSnapshot, query, where } from "firebase/firestore"
+import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+  doc,
+  updateDoc,
+} from "firebase/firestore"
 import { db } from "../firebase"
 
 export default function AdminStudentNotifications({ branch }) {
@@ -18,6 +25,7 @@ export default function AdminStudentNotifications({ branch }) {
         const list = snapshot.docs
           .map((item) => {
             const data = item.data()
+
             return {
               id: item.id,
               ...data,
@@ -42,6 +50,23 @@ export default function AdminStudentNotifications({ branch }) {
     return () => unsubscribe()
   }, [branch])
 
+  // Mark notification as read
+  const markAsRead = async (notificationId) => {
+    try {
+      const notificationRef = doc(
+        db,
+        "adminNotifications",
+        notificationId
+      )
+
+      await updateDoc(notificationRef, {
+        read: true,
+      })
+    } catch (error) {
+      console.error("Notification read update error:", error)
+    }
+  }
+
   const formatTime = (time) => {
     if (!time) return ""
     return new Date(time).toLocaleString()
@@ -52,35 +77,78 @@ export default function AdminStudentNotifications({ branch }) {
       <div style={styles.header}>
         <div>
           <h2 style={styles.title}>🔔 Student Notifications</h2>
+
           <p style={styles.subtitle}>
             Student se aane wali notifications — {branch} Branch
           </p>
         </div>
+
         <div style={styles.liveBadge}>● LIVE</div>
       </div>
 
       {loading ? (
-        <div style={styles.empty}>Notifications load ho rahi hain...</div>
+        <div style={styles.empty}>
+          Notifications load ho rahi hain...
+        </div>
       ) : notifications.length === 0 ? (
-        <div style={styles.empty}>Abhi koi student notification nahi hai.</div>
+        <div style={styles.empty}>
+          Abhi koi student notification nahi hai.
+        </div>
       ) : (
         <div style={styles.list}>
           {notifications.map((item) => (
-            <div key={item.id} style={styles.card}>
+            <div
+              key={item.id}
+              style={{
+                ...styles.card,
+                ...(item.read ? styles.readCard : styles.unreadCard),
+              }}
+              onClick={() => {
+                if (!item.read) {
+                  markAsRead(item.id)
+                }
+              }}
+            >
               <div style={styles.icon}>🔔</div>
+
               <div style={styles.content}>
                 <div style={styles.topRow}>
-                  <h3 style={styles.notificationTitle}>{item.title}</h3>
-                  <span style={styles.type}>{item.type || "General"}</span>
+                  <h3 style={styles.notificationTitle}>
+                    {item.title}
+                  </h3>
+
+                  <span style={styles.type}>
+                    {item.type || "General"}
+                  </span>
                 </div>
-                <p style={styles.message}>{item.message}</p>
+
+                <p style={styles.message}>
+                  {item.message}
+                </p>
+
                 <div style={styles.meta}>
-                  <strong>{item.studentName || "Student"}</strong>
-                  {item.studentId ? ` • ${item.studentId}` : ""}
-                  {item.studentEmail ? ` • ${item.studentEmail}` : ""}
+                  <strong>
+                    {item.studentName || "Student"}
+                  </strong>
+
+                  {item.studentId
+                    ? ` • ${item.studentId}`
+                    : ""}
+
+                  {item.studentEmail
+                    ? ` • ${item.studentEmail}`
+                    : ""}
+
                   <br />
+
                   {formatTime(item.createdAt)}
                 </div>
+
+                {!item.read && (
+                  <div style={styles.unreadText}>
+                    ● Unread — Click to mark as read
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -91,7 +159,10 @@ export default function AdminStudentNotifications({ branch }) {
 }
 
 const styles = {
-  page: { padding: 20 },
+  page: {
+    padding: 20,
+  },
+
   header: {
     display: "flex",
     justifyContent: "space-between",
@@ -99,8 +170,18 @@ const styles = {
     gap: 16,
     marginBottom: 20,
   },
-  title: { margin: 0, fontSize: 26, fontWeight: 800 },
-  subtitle: { margin: "6px 0 0", color: "#6b7280" },
+
+  title: {
+    margin: 0,
+    fontSize: 26,
+    fontWeight: 800,
+  },
+
+  subtitle: {
+    margin: "6px 0 0",
+    color: "#6b7280",
+  },
+
   liveBadge: {
     background: "#dcfce7",
     color: "#15803d",
@@ -109,16 +190,33 @@ const styles = {
     fontWeight: 800,
     fontSize: 12,
   },
-  list: { display: "grid", gap: 12 },
+
+  list: {
+    display: "grid",
+    gap: 12,
+  },
+
   card: {
     display: "flex",
     gap: 14,
-    background: "#fff",
-    border: "1px solid #e5e7eb",
     borderRadius: 16,
     padding: 16,
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+  },
+
+  unreadCard: {
+    background: "#fff7f7",
+    border: "1px solid #fecaca",
+    boxShadow: "0 4px 14px rgba(220,38,38,0.08)",
+  },
+
+  readCard: {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
     boxShadow: "0 4px 14px rgba(0,0,0,0.05)",
   },
+
   icon: {
     width: 44,
     height: 44,
@@ -129,14 +227,23 @@ const styles = {
     flexShrink: 0,
     fontSize: 21,
   },
-  content: { flex: 1 },
+
+  content: {
+    flex: 1,
+  },
+
   topRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12,
   },
-  notificationTitle: { margin: 0, fontSize: 17 },
+
+  notificationTitle: {
+    margin: 0,
+    fontSize: 17,
+  },
+
   type: {
     background: "#eff6ff",
     color: "#1d4ed8",
@@ -145,8 +252,26 @@ const styles = {
     fontSize: 11,
     fontWeight: 700,
   },
-  message: { margin: "8px 0", color: "#374151", lineHeight: 1.5 },
-  meta: { color: "#6b7280", fontSize: 12, lineHeight: 1.6 },
+
+  message: {
+    margin: "8px 0",
+    color: "#374151",
+    lineHeight: 1.5,
+  },
+
+  meta: {
+    color: "#6b7280",
+    fontSize: 12,
+    lineHeight: 1.6,
+  },
+
+  unreadText: {
+    marginTop: 8,
+    color: "#dc2626",
+    fontSize: 12,
+    fontWeight: 700,
+  },
+
   empty: {
     background: "#fff",
     border: "1px solid #e5e7eb",

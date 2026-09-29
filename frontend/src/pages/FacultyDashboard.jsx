@@ -3,21 +3,25 @@ import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   getDocs,
+  getDoc,
   query,
   where,
   addDoc,
   updateDoc,
+  deleteDoc,
   doc,
   serverTimestamp,
+  onSnapshot,
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
-
-const FACULTY_EMAIL = "mdey9006690@gmail.com";
 
 export default function FacultyDashboard() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState("Dashboard");
+  const [facultyData, setFacultyData] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const [students, setStudents] = useState([]);
   const [results, setResults] = useState([]);
@@ -31,6 +35,7 @@ export default function FacultyDashboard() {
   const [studentSearch, setStudentSearch] = useState("");
   const [studentClassFilter, setStudentClassFilter] = useState("All");
   const [studentStreamFilter, setStudentStreamFilter] = useState("All");
+  const [studentBranchFilter, setStudentBranchFilter] = useState("All");
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
   const [studentForm, setStudentForm] = useState({
@@ -54,6 +59,7 @@ export default function FacultyDashboard() {
     subject: "",
     className: "9th",
     stream: "",
+    branch: "",
     description: "",
     materialUrl: "",
   });
@@ -64,35 +70,118 @@ export default function FacultyDashboard() {
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    let unsubscribeNotifications = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
         window.location.href = "/login";
         return;
       }
 
-      if (
-        currentUser.email?.toLowerCase() !== FACULTY_EMAIL.toLowerCase()
-      ) {
-        alert("Access denied. Faculty account required.");
+      const facultyEmail = currentUser.email?.trim().toLowerCase();
+
+      if (!facultyEmail) {
+        alert("Faculty email not found.");
+        await auth.signOut();
         window.location.href = "/login";
         return;
       }
 
-      setUser(currentUser);
-
       try {
-        await loadAllData();
-      } catch (error) {
-        console.error(error);
-      }
+        const facultyRef = doc(db, "faculty", facultyEmail);
+        const facultySnapshot = await getDoc(facultyRef);
 
-      setLoading(false);
+        if (!facultySnapshot.exists()) {
+          alert("Access denied. Faculty account not found.");
+          await auth.signOut();
+          window.location.href = "/login";
+          return;
+        }
+
+        const facultyDoc = facultySnapshot;
+        const data = facultyDoc.data();
+
+        if (data.status !== "active") {
+          alert("Your faculty account is currently inactive.");
+          await auth.signOut();
+          window.location.href = "/login";
+          return;
+        }
+
+        const normalizedFaculty = {
+        id: facultyDoc.id,
+        name: data.name || currentUser.displayName || "Faculty",
+        email: facultyEmail,
+        branches: data.branches || [data.branch || ""],
+        subject: data.subject || "",
+        status: data.status || "active",
+        };
+
+        setUser(currentUser);
+        setFacultyData(normalizedFaculty);
+
+        localStorage.setItem("facultyId", facultyDoc.id);
+        localStorage.setItem("facultyEmail", facultyEmail);
+        localStorage.setItem("facultyName", normalizedFaculty.name);
+
+        localStorage.setItem(
+        "facultyBranches",
+        JSON.stringify(normalizedFaculty.branches)
+        );
+
+        localStorage.setItem("facultySubject", normalizedFaculty.subject);
+
+       await loadAllData(normalizedFaculty.branches);
+
+        const notificationQuery = query(
+          collection(db, "facultyNotifications"),
+          where("facultyEmail", "==", facultyEmail)
+        );
+
+        unsubscribeNotifications = onSnapshot(
+          notificationQuery,
+          (snapshot) => {
+            const notificationData = snapshot.docs
+
+              .map((item) => ({ id: item.id, ...item.data() }))
+              .filter(
+              (item) =>
+    !normalizedFaculty.branches?.length ||
+    normalizedFaculty.branches.includes(item.branch)
+)
+              .sort((a, b) => {
+                const aTime = a.createdAt?.seconds || 0;
+                const bTime = b.createdAt?.seconds || 0;
+                return bTime - aTime;
+              });
+
+            setNotifications(notificationData);
+          },
+          (error) => {
+            console.error("Faculty notification error:", error);
+          }
+        );
+
+        setLoading(false);
+      } catch (error) {
+        console.error("Faculty authentication error:", error);
+        alert("Faculty verification failed. Please try again.");
+        try {
+          await auth.signOut();
+        } catch (signOutError) {
+          console.error("Sign out error:", signOutError);
+        }
+        window.location.href = "/login";
+      }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeNotifications) unsubscribeNotifications();
+    };
   }, []);
 
-  const loadAllData = async () => {
+  const loadAllData = async (assignedBranches = []) => {
     try {
       const studentQuery = query(
         collection(db, "students"),
@@ -100,51 +189,69 @@ export default function FacultyDashboard() {
       );
 
       const studentSnap = await getDocs(studentQuery);
-
-      const studentData = studentSnap.docs.map((item) => ({
-        id: item.id,
+      const allStudentData = studentSnap.docs.map((item) => ({
         ...item.data(),
+        id: item.id,
+        firestoreId: item.id,
       }));
 
-      setStudents(studentData);
+      const branchStudents = allStudentData.filter(
+        (student) => !assignedBranches.length || assignedBranches.includes(student.branch)
+      );
+      const branchStudentEmails = new Set(
+        branchStudents.map((student) => student.email?.trim().toLowerCase()).filter(Boolean)
+      );
+      setStudents(branchStudents);
 
       const resultSnap = await getDocs(collection(db, "results"));
-
+      const allResults = resultSnap.docs.map((item) => ({
+        ...item.data(),
+        id: item.id,
+        firestoreId: item.id,
+      }));
       setResults(
-        resultSnap.docs.map((item) => ({
-          id: item.id,
-          ...item.data(),
-        }))
+        allResults.filter(
+          (result) =>
+            !assignedBranches.length || assignedBranches.includes(result.branch)
+        )
       );
 
-      const materialSnap = await getDocs(
-        collection(db, "studyMaterials")
-      );
-
+      const materialSnap = await getDocs(collection(db, "studyMaterials"));
+      const allMaterials = materialSnap.docs.map((item) => ({
+        ...item.data(),
+        id: item.id,
+        firestoreId: item.id,
+      }));
       setMaterials(
-        materialSnap.docs.map((item) => ({
-          id: item.id,
-          ...item.data(),
-        }))
+        allMaterials.filter(
+          (material) => !assignedBranches.length || assignedBranches.includes(material.branch)
+        )
       );
 
       const noticeSnap = await getDocs(collection(db, "notices"));
-
-      const paymentSnap = await getDocs(collection(db, "payments"));
-
+      const allNotices = noticeSnap.docs.map((item) => ({
+        ...item.data(),
+        id: item.id,
+        firestoreId: item.id,
+      }));
       setNotices(
-        noticeSnap.docs.map((item) => ({
-          id: item.id,
-          ...item.data(),
-        }))
+        allNotices.filter(
+          (notice) => !assignedBranches.length || assignedBranches.includes(notice.branch)
+        )
       );
 
+      const paymentSnap = await getDocs(collection(db, "payments"));
+      const allPayments = paymentSnap.docs.map((item) => ({
+        ...item.data(),
+        id: item.id,
+        firestoreId: item.id,
+      }));
       setPayments(
-        paymentSnap.docs
-          .map((item) => ({
-            id: item.id,
-            ...item.data(),
-          }))
+        allPayments
+          .filter(
+            (payment) =>
+              !assignedBranches.length || assignedBranches.includes(payment.branch)
+          )
           .sort((a, b) => {
             const aTime = a.createdAt?.seconds || 0;
             const bTime = b.createdAt?.seconds || 0;
@@ -154,6 +261,27 @@ export default function FacultyDashboard() {
     } catch (error) {
       console.error("Data load error:", error);
       alert("Data load nahi ho paya.");
+    }
+  };
+
+  const markNotificationRead = async (notification) => {
+    if (!notification?.id || notification.read) return;
+    try {
+      await updateDoc(doc(db, "facultyNotifications", notification.id), {
+        read: true,
+        readAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Notification read error:", error);
+    }
+  };
+
+  const deleteNotification = async (notification) => {
+    if (!notification?.id) return;
+    try {
+      await deleteDoc(doc(db, "facultyNotifications", notification.id));
+    } catch (error) {
+      console.error("Notification delete error:", error);
     }
   };
 
@@ -180,7 +308,12 @@ export default function FacultyDashboard() {
     }
     try {
       setSaving(true);
-      await updateDoc(doc(db, "students", editingStudent.id), {
+      const firestoreStudentId = editingStudent?.firestoreId || editingStudent?.id;
+      if (!firestoreStudentId || firestoreStudentId.includes("/")) {
+        throw new Error("Invalid student Firestore document ID.");
+      }
+
+      await updateDoc(doc(db, "students", firestoreStudentId), {
         name: studentForm.name.trim(),
         fatherName: studentForm.fatherName.trim(),
         mobile: studentForm.mobile.trim(),
@@ -190,10 +323,10 @@ export default function FacultyDashboard() {
       });
       alert("Student details updated successfully.");
       setEditingStudent(null);
-      await loadAllData();
+     await loadAllData(facultyData?.branches || []);
     } catch (error) {
       console.error(error);
-      alert("Student update nahi hua.");
+      alert("Student update nahi hua. " + error.message);
     } finally {
       setSaving(false);
     }
@@ -257,6 +390,9 @@ export default function FacultyDashboard() {
         exam: resultForm.exam,
         percentage: percentage,
         branch: student.branch || "",
+        facultyEmail: user?.email?.trim().toLowerCase() || "",
+        facultyName: facultyData?.name || "Faculty",
+        subject: facultyData?.subject || "",
         status: "Published",
         date: new Date().toLocaleDateString(),
         createdAt: serverTimestamp(),
@@ -272,7 +408,7 @@ export default function FacultyDashboard() {
 
       setShowResultForm(false);
 
-      await loadAllData();
+      await loadAllData(facultyData?.branches || []);
     } catch (error) {
       console.error(error);
       alert("Result save nahi hua.");
@@ -311,6 +447,9 @@ export default function FacultyDashboard() {
         stream: materialForm.stream,
         description: materialForm.description,
         materialUrl: materialForm.materialUrl,
+        branch: materialForm.branch || "",
+        facultyEmail: user?.email?.trim().toLowerCase() || "",
+        facultyName: facultyData?.name || "Faculty",
         status: "Published",
         createdAt: serverTimestamp(),
       });
@@ -322,13 +461,14 @@ export default function FacultyDashboard() {
         subject: "",
         className: "9th",
         stream: "",
+        branch: "",
         description: "",
         materialUrl: "",
       });
 
       setShowMaterialForm(false);
 
-      await loadAllData();
+      await loadAllData(facultyData?.branches || []);
     } catch (error) {
       console.error(error);
       alert("Study material save nahi hua.");
@@ -351,6 +491,9 @@ export default function FacultyDashboard() {
       await addDoc(collection(db, "notices"), {
         title: noticeForm.title,
         message: noticeForm.message,
+        branch: facultyData?.branch || "",
+        facultyEmail: user?.email?.trim().toLowerCase() || "",
+        facultyName: facultyData?.name || "Faculty",
         status: "Published",
         date: new Date().toLocaleDateString(),
         createdAt: serverTimestamp(),
@@ -365,7 +508,7 @@ export default function FacultyDashboard() {
 
       setShowNoticeForm(false);
 
-      await loadAllData();
+      await loadAllData(facultyData?.branches || []);
     } catch (error) {
       console.error(error);
       alert("Notice save nahi hua.");
@@ -772,7 +915,12 @@ export default function FacultyDashboard() {
           border: none; background: #f59e0b; color: white; padding: 7px 11px;
           border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 600;
         }
-.faculty-view-btn {
+        .faculty-delete-btn {
+          border: none; background: #dc2626; color: white; padding: 7px 11px;
+          border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 600;
+        }
+
+        .faculty-view-btn {
           border: none;
           background: #2563eb;
           color: white;
@@ -1185,6 +1333,28 @@ export default function FacultyDashboard() {
           color: #6b7280;
         }
 
+
+        .faculty-header-actions { display:flex; align-items:center; gap:16px; }
+        .faculty-notification-bell { position:relative; border:1px solid #e5e7eb; background:#fff; width:42px; height:42px; border-radius:10px; cursor:pointer; font-size:19px; }
+        .faculty-notification-count { position:absolute; top:-6px; right:-6px; min-width:19px; height:19px; padding:0 5px; border-radius:99px; background:#dc2626; color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; font-weight:700; border:2px solid #fff; }
+        .faculty-assigned-info { display:flex; gap:12px; margin-top:18px; flex-wrap:wrap; }
+        .faculty-assigned-info > div { background:#fff; border:1px solid #dbeafe; border-radius:10px; padding:10px 14px; min-width:150px; }
+        .faculty-assigned-info span { display:block; color:#64748b; font-size:11px; margin-bottom:4px; }
+        .faculty-assigned-info strong { color:#1e3a8a; }
+        .faculty-notification-list { display:flex; flex-direction:column; gap:12px; }
+        .faculty-notification-card { display:flex; align-items:flex-start; gap:13px; background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px; cursor:pointer; transition:.2s; }
+        .faculty-notification-card.unread { border-color:#bfdbfe; background:#eff6ff; }
+        .faculty-notification-card:hover { box-shadow:0 5px 18px rgba(15,23,42,.07); }
+        .faculty-notification-icon { width:42px; height:42px; border-radius:10px; background:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:20px; }
+        .faculty-notification-content { flex:1; min-width:0; }
+        .faculty-notification-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+        .faculty-notification-top h3 { margin:0; font-size:15px; }
+        .faculty-notification-content p { margin:7px 0; color:#475569; line-height:1.5; }
+        .faculty-notification-content small { color:#94a3b8; }
+        .faculty-unread-dot { background:#dc2626; color:#fff; border-radius:20px; padding:3px 7px; font-size:10px; font-weight:700; }
+        .faculty-notification-delete { border:0; background:#fee2e2; color:#b91c1c; width:34px; height:34px; border-radius:8px; cursor:pointer; flex-shrink:0; }
+        .faculty-student-actions { display:flex; gap:6px; flex-wrap:wrap; }
+
         .faculty-loading {
           min-height: 100vh;
           display: flex;
@@ -1270,6 +1440,7 @@ export default function FacultyDashboard() {
               "Study Materials",
               "Payments",
               "Notices",
+              "Notifications",
             ].map((item) => (
               <button
                 key={item}
@@ -1284,6 +1455,7 @@ export default function FacultyDashboard() {
                   {item === "Study Materials" && "📖"}
                   {item === "Payments" && "💰"}
                   {item === "Notices" && "📢"}
+                  {item === "Notifications" && "🔔"}
                 </span>
 
                 <span>{item}</span>
@@ -1303,14 +1475,35 @@ export default function FacultyDashboard() {
               <p>Faculty Management Panel</p>
             </div>
 
-            <div className="faculty-profile">
-              <div className="faculty-avatar">
-                {user?.displayName?.charAt(0) || "F"}
-              </div>
+            <div className="faculty-header-actions">
+              <button
+                type="button"
+                className="faculty-notification-bell"
+                onClick={() => setActivePage("Notifications")}
+                title="Notifications"
+              >
+                🔔
+                {notifications.filter((item) => !item.read).length > 0 && (
+                  <span className="faculty-notification-count">
+                    {notifications.filter((item) => !item.read).length > 99
+                      ? "99+"
+                      : notifications.filter((item) => !item.read).length}
+                  </span>
+                )}
+              </button>
 
-              <div>
-                <strong>{user?.displayName || "Faculty"}</strong>
-                <small>{user?.email}</small>
+              <div className="faculty-profile">
+                <div className="faculty-avatar">
+                  {(facultyData?.name || user?.displayName || "F").charAt(0).toUpperCase()}
+                </div>
+
+               <div>
+  <strong>{facultyData?.name || user?.displayName || "Faculty"}</strong>
+  <small>
+    {facultyData?.branches?.join(", ") || "Branch not assigned"} •{" "}
+    {facultyData?.subject || "Faculty"}
+  </small>
+</div>
               </div>
             </div>
           </header>
@@ -1323,6 +1516,17 @@ export default function FacultyDashboard() {
                   Yahan se aap students, results, study materials aur
                   notices manage kar sakte hain.
                 </p>
+<div className="faculty-assigned-info">
+  <div>
+    <span>Assigned Branches</span>
+    <strong>{facultyData?.branches?.join(", ") || "-"}</strong>
+  </div>
+
+  <div>
+    <span>Subject</span>
+    <strong>{facultyData?.subject || "-"}</strong>
+  </div>
+</div>
               </div>
 
               <div className="faculty-stats">
@@ -1454,26 +1658,30 @@ export default function FacultyDashboard() {
                 />
 
                 <select
-                  className="faculty-input"
-                  value={studentClassFilter}
-                  onChange={(e) => setStudentClassFilter(e.target.value)}
-                >
-                  <option value="All">All Classes</option>
-                  <option value="9th">9th</option>
-                  <option value="10th">10th</option>
-                  <option value="11th">11th</option>
-                  <option value="12th">12th</option>
-                </select>
+  className="faculty-input"
+  value={studentStreamFilter}
+  onChange={(e) => setStudentStreamFilter(e.target.value)}
+>
+  <option value="All">All Streams</option>
+  <option value="Science">Science</option>
+  <option value="Arts">Arts</option>
+</select>
 
-                <select
-                  className="faculty-input"
-                  value={studentStreamFilter}
-                  onChange={(e) => setStudentStreamFilter(e.target.value)}
-                >
-                  <option value="All">All Streams</option>
-                  <option value="Science">Science</option>
-                  <option value="Arts">Arts</option>
-                </select>
+<select
+  className="faculty-input"
+  value={studentBranchFilter}
+  onChange={(e) => setStudentBranchFilter(e.target.value)}
+>
+  <option value="All">All Branches</option>
+
+  {facultyData?.branches?.includes("Itimha") && (
+    <option value="Itimha">Itimha</option>
+  )}
+
+  {facultyData?.branches?.includes("Bardiha") && (
+    <option value="Bardiha">Bardiha</option>
+  )}
+</select>
               </div>
 
               {(() => {
@@ -1494,7 +1702,16 @@ export default function FacultyDashboard() {
                     studentStreamFilter === "All" ||
                     student.stream === studentStreamFilter;
 
-                  return matchesSearch && matchesClass && matchesStream;
+                  const matchesBranch =
+                    studentBranchFilter === "All" ||
+                    student.branch === studentBranchFilter;
+
+                  return (
+                    matchesSearch &&
+                    matchesClass &&
+                    matchesStream &&
+                    matchesBranch
+                  );
                 });
 
                 return filteredStudents.length === 0 ? (
@@ -1538,7 +1755,6 @@ export default function FacultyDashboard() {
                                 >
                                   Edit
                                 </button>
-
                               </div>
                             </td>
                           </tr>
@@ -1567,7 +1783,7 @@ export default function FacultyDashboard() {
 
                     <div className="faculty-detail-grid">
                       <div><span>Name</span><strong>{selectedStudent.name || "-"}</strong></div>
-                      <div><span>Father Name</span><strong>{selectedStudent.fatherName || selectedStudent.father || selectedStudent.father_name || "-"}</strong></div>
+                      <div><span>Father Name</span><strong>{selectedStudent.fatherName || "-"}</strong></div>
                       <div><span>Email</span><strong>{selectedStudent.email || "-"}</strong></div>
                       <div><span>Mobile</span><strong>{selectedStudent.mobile || "-"}</strong></div>
                       <div><span>Class</span><strong>{selectedStudent.className || "-"}</strong></div>
@@ -1923,6 +2139,58 @@ export default function FacultyDashboard() {
                     </>
                   )}
 
+                  <label>Branch</label>
+
+                  <select
+                    value={materialForm.branch || ""}
+                    onChange={(e) =>
+                      setMaterialForm({
+                        ...materialForm,
+                        branch: e.target.value,
+                      })
+                    }
+                    className="faculty-input"
+                    required
+                  >
+                    <option value="">Select Branch</option>
+
+                    {facultyData?.branches?.includes("Itimha") && (
+                      <option value="Itimha">Itimha</option>
+                    )}
+
+                    {facultyData?.branches?.includes("Bardiha") && (
+                      <option value="Bardiha">Bardiha</option>
+                    )}
+                  </select>
+
+                  {(materialForm.className === "11th" ||
+  materialForm.className === "12th") && (
+  <>
+    <label>Stream</label>
+
+    <select
+      value={materialForm.stream}
+      onChange={(e) =>
+        setMaterialForm({
+          ...materialForm,
+          stream: e.target.value,
+        })
+      }
+      className="faculty-input"
+    >
+      <option value="">
+        Select Stream
+      </option>
+      <option value="Science">
+        Science
+      </option>
+      <option value="Arts">
+        Arts
+      </option>
+    </select>
+  </>
+)}
+
                   <label>Description</label>
 
                   <textarea
@@ -2241,6 +2509,66 @@ export default function FacultyDashboard() {
                 </div>
               </div>
             </div>
+          )}
+
+          {activePage === "Notifications" && (
+            <section className="faculty-section">
+              <div className="faculty-section-header">
+                <div>
+                  <h2>Notifications 🔔</h2>
+                  <p>Realtime notifications for your faculty account.</p>
+                </div>
+                <span className="faculty-badge">
+                  {notifications.filter((item) => !item.read).length} Unread
+                </span>
+              </div>
+
+              {notifications.length === 0 ? (
+                <div className="faculty-empty">
+                  No notifications available.
+                </div>
+              ) : (
+                <div className="faculty-notification-list">
+                  {notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`faculty-notification-card ${notification.read ? "read" : "unread"}`}
+                      onClick={() => markNotificationRead(notification)}
+                    >
+                      <div className="faculty-notification-icon">
+                        {notification.type === "payment" ? "💰" :
+                         notification.type === "result" ? "📊" :
+                         notification.type === "material" ? "📖" :
+                         notification.type === "notice" ? "📢" : "🔔"}
+                      </div>
+                      <div className="faculty-notification-content">
+                        <div className="faculty-notification-top">
+                          <h3>{notification.title || "New Notification"}</h3>
+                          {!notification.read && <span className="faculty-unread-dot">New</span>}
+                        </div>
+                        <p>{notification.message || "You have a new notification."}</p>
+                        <small>
+                          {notification.createdAt?.seconds
+                            ? new Date(notification.createdAt.seconds * 1000).toLocaleString()
+                            : "Just now"}
+                        </small>
+                      </div>
+                      <button
+                        type="button"
+                        className="faculty-notification-delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteNotification(notification);
+                        }}
+                        title="Delete notification"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
 
           {activePage === "Notices" && (

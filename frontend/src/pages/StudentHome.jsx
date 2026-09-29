@@ -117,6 +117,11 @@ function StudentHome() {
 
         const studentData = snapshot.docs[0].data()
 
+        const resolvedStudentId =
+          studentData.studentId ||
+          studentData.id ||
+          ""
+
 
         console.log(
           "Student data:",
@@ -138,10 +143,18 @@ function StudentHome() {
 
 
         // Student data set
-        setStudent({
-          id: snapshot.docs[0].id,
-          ...studentData,
-        })
+        const firestoreDocumentId = snapshot.docs[0].id
+
+setStudent({
+  ...studentData,
+
+  // Firebase ka actual document ID
+  id: firestoreDocumentId,
+  firestoreDocumentId: firestoreDocumentId,
+
+  // Student ka display ID
+  studentId: resolvedStudentId,
+})
 
 
         // LocalStorage bhi update kar do
@@ -162,7 +175,7 @@ function StudentHome() {
 
         localStorage.setItem(
           "studentId",
-          studentData.studentId || ""
+          resolvedStudentId
         )
 
         localStorage.setItem(
@@ -216,7 +229,6 @@ function StudentHome() {
 
 
     return () => unsubscribe()
-
   }, [])
 
 
@@ -225,148 +237,231 @@ function StudentHome() {
   // AUTOMATIC GPS TRACKING
   // =========================
   const startLocationTracking = () => {
-    if (!student?.id) return
+  if (!student?.id) {
+    setLocationError(
+      "Student details abhi load nahi hui hain."
+    )
+    return
+  }
 
-    if (!navigator.geolocation) {
-      setLocationError("Is device/browser me GPS location support nahi hai.")
-      return
-    }
+  if (!navigator.geolocation) {
+    setLocationError(
+      "Is browser/device me GPS location support nahi hai."
+    )
+    return
+  }
 
-    // Duplicate GPS watcher mat banao.
-    if (locationWatchRef.current !== null) return
+  if (locationWatchRef.current !== null) {
+    return
+  }
 
-    setLocationLoading(true)
-    setLocationError("")
+  setLocationLoading(true)
+  setLocationError("")
 
-    const watchId = navigator.geolocation.watchPosition(
-      async (position) => {
-        try {
-          const now = Date.now()
+  const watchId = navigator.geolocation.watchPosition(
+    async (position) => {
+      try {
+        const latitude = position.coords.latitude
+        const longitude = position.coords.longitude
+        const accuracy = position.coords.accuracy
+        const now = Date.now()
 
-          // First location immediately save karo.
-          // Uske baad maximum har 10 seconds me Firestore update karo.
-          if (lastLocationSaveRef.current !== 0 && now - lastLocationSaveRef.current < 10000) {
-            setLastLocation({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy: position.coords.accuracy,
-              updatedAt: new Date(),
-            })
-            setLocationLoading(false)
-            setLocationSharing(true)
-            return
-          }
+        // Screen par location immediately dikhao
+        setLastLocation({
+          latitude,
+          longitude,
+          accuracy,
+          updatedAt: new Date(),
+        })
 
-          const locationData = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            updatedAt: serverTimestamp(),
-          }
-
-          const isFirstLocationUpdate = lastLocationSaveRef.current === 0
-
-          await updateDoc(doc(db, "students", student.id), {
-            lastLocation: locationData,
-            locationSharing: true,
-          })
-
-          if (isFirstLocationUpdate) {
-            await sendAdminNotification({
-              studentEmail: student.email,
-              studentId: student.studentId || "",
-              studentFirestoreId: student.id,
-              studentName: student.name || "",
-              branch: student.branch || "",
-              title: "Student Location Sharing Started",
-              message: `${student.name || "Student"} ne live location sharing start ki hai.`,
-              type: "Location",
-            })
-          }
-
-          lastLocationSaveRef.current = now
-
-          setLastLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            updatedAt: new Date(),
-          })
-
-          setLocationSharing(true)
-          setLocationLoading(false)
-        } catch (err) {
-          console.error("Location save error:", err)
-          setLocationError("GPS location save nahi ho pa rahi hai.")
-          setLocationLoading(false)
-        }
-      },
-      (err) => {
-        console.error("Location error:", err)
+        setLocationSharing(true)
         setLocationLoading(false)
-        setLocationSharing(false)
 
-        if (err.code === 1) {
-          setLocationError("Browser me Location permission Allow karein.")
-        } else if (err.code === 2) {
-          setLocationError("GPS location available nahi hai. Phone ki Location/GPS ON karein.")
-        } else {
-          setLocationError("GPS location lene me problem aa rahi hai.")
+        // Firestore ko maximum 10 second me ek baar update karo
+        if (
+          lastLocationSaveRef.current !== 0 &&
+          now - lastLocationSaveRef.current < 10000
+        ) {
+          return
         }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 5000,
+
+        const locationData = {
+          latitude,
+          longitude,
+          accuracy,
+          updatedAt: serverTimestamp(),
+        }
+
+        const isFirstLocationUpdate =
+          lastLocationSaveRef.current === 0
+
+        const studentDocId =
+  student.firestoreDocumentId ||
+  student.firebaseDocId ||
+  student.firestoreId ||
+  student.id
+
+await updateDoc(
+  doc(db, "students", studentDocId),
+  {
+    lastLocation: locationData,
+    locationSharing: true,
+  }
+)
+
+        if (isFirstLocationUpdate) {
+          await sendAdminNotification({
+            studentEmail: student.email || "",
+            studentId:
+              student.studentId ||
+              student.id ||
+              "",
+            studentFirestoreId: student.id,
+            studentName: student.name || "",
+            branch: student.branch || "",
+            title: "Student Location Sharing Started",
+            message: `${student.name || "Student"} ne live location sharing start ki hai.`,
+            type: "Location",
+          })
+        }
+
+        lastLocationSaveRef.current = now
+      } catch (err) {
+  console.error("Location save error:", err)
+
+  console.error("Firebase Error Code:", err?.code)
+  console.error("Firebase Error Message:", err?.message)
+
+  setLocationError(
+    `Firebase Error: ${err?.code || "unknown"} - ${
+      err?.message || "Location save nahi ho pa rahi hai."
+    }`
+  )
+
+  setLocationLoading(false)
+}
+    },
+
+    (err) => {
+      console.error(
+        "Browser GPS Error:",
+        err
+      )
+
+      setLocationLoading(false)
+      setLocationSharing(false)
+
+      if (err.code === 1) {
+        setLocationError(
+          "Location permission blocked hai. Browser ke address bar ke paas 🔒 icon par click karke Location → Allow karein."
+        )
+      } else if (err.code === 2) {
+        setLocationError(
+          "Location available nahi hai. Device ki Location/GPS ON karein."
+        )
+      } else if (err.code === 3) {
+        setLocationError(
+          "GPS location lene me timeout ho gaya. Dobara Start Location dabayein."
+        )
+      } else {
+        setLocationError(
+          "GPS location lene me problem aa rahi hai."
+        )
       }
+    },
+
+    {
+      enableHighAccuracy: true,
+      timeout: 30000,
+      maximumAge: 0,
+    }
+  )
+
+  locationWatchRef.current = watchId
+}
+
+
+// Student login/approved hone ke baad GPS automatically start
+useEffect(() => {
+  if (!student?.id) return
+
+  startLocationTracking()
+
+  return () => {
+    if (
+      locationWatchRef.current !== null &&
+      navigator.geolocation
+    ) {
+      navigator.geolocation.clearWatch(
+        locationWatchRef.current
+      )
+
+      locationWatchRef.current = null
+    }
+  }
+}, [student?.id])
+
+
+const openMyLocation = () => {
+  if (!lastLocation) {
+    setLocationError(
+      "Location abhi available nahi hai. Pehle Start Location karein."
+    )
+    return
+  }
+
+  const {
+    latitude,
+    longitude,
+  } = lastLocation
+
+  if (
+    typeof latitude !== "number" ||
+    typeof longitude !== "number"
+  ) {
+    setLocationError(
+      "Valid location coordinates available nahi hain."
+    )
+    return
+  }
+
+  const url =
+    `https://www.google.com/maps?q=${latitude},${longitude}`
+
+  window.open(
+    url,
+    "_blank",
+    "noopener,noreferrer"
+  )
+}
+
+
+const submitPayment = async () => {
+  if (!paymentAmount || Number(paymentAmount) <= 0) {
+    alert("Please payment amount enter karein.")
+    return
+  }
+
+  if (!utr.trim()) {
+    alert("Please UTR / Transaction ID enter karein.")
+    return
+  }
+
+  if (!student?.email) {
+    alert("Student details nahi mili.")
+    return
+  }
+
+  try {
+    setPaymentLoading(true)
+
+    setPaymentMessage(
+      "Payment details save ho rahi hain..."
     )
 
-    locationWatchRef.current = watchId
-  }
-
-  // Student approved/login hote hi GPS automatically start.
-  useEffect(() => {
-    if (!student?.id) return
-
-    startLocationTracking()
-
-    return () => {
-      if (locationWatchRef.current !== null && navigator.geolocation) {
-        navigator.geolocation.clearWatch(locationWatchRef.current)
-        locationWatchRef.current = null
-      }
-    }
-  }, [student?.id])
-
-  const openMyLocation = () => {
-    if (!lastLocation) return
-
-    const url = `https://www.google.com/maps?q=${lastLocation.latitude},${lastLocation.longitude}`
-    window.open(url, "_blank", "noopener,noreferrer")
-  }
-
-
-  const submitPayment = async () => {
-    if (!paymentAmount || Number(paymentAmount) <= 0) {
-      alert("Please payment amount enter karein.")
-      return
-    }
-
-    if (!utr.trim()) {
-      alert("Please UTR / Transaction ID enter karein.")
-      return
-    }
-
-    if (!student?.email) {
-      alert("Student details nahi mili.")
-      return
-    }
-
-    try {
-      setPaymentLoading(true)
-      setPaymentMessage("Payment details save ho rahi hain...")
-
-      await addDoc(collection(db, "payments"), {
+    await addDoc(
+      collection(db, "payments"),
+      {
         studentId: student.studentId || "",
         studentFirestoreId: student.id || "",
         studentEmail: student.email.toLowerCase(),
@@ -380,33 +475,39 @@ function StudentHome() {
         status: "Pending Verification",
         date: new Date().toISOString(),
         createdAt: serverTimestamp(),
-      })
+      }
+    )
 
-      await sendAdminNotification({
-        studentEmail: student.email,
-        studentId: student.studentId || "",
-        studentFirestoreId: student.id || "",
-        studentName: student.name || "",
-        branch: student.branch || "",
-        title: "New Payment Submitted",
-        message: `${student.name || "Student"} ne ₹${Number(paymentAmount)} ka payment submit kiya hai. UTR: ${utr.trim()}`,
-        type: "Payment",
-      })
+    await sendAdminNotification({
+      studentEmail: student.email,
+      studentId: student.studentId || "",
+      studentFirestoreId: student.id || "",
+      studentName: student.name || "",
+      branch: student.branch || "",
+      title: "New Payment Submitted",
+      message: `${student.name || "Student"} ne ₹${Number(paymentAmount)} ka payment submit kiya hai. UTR: ${utr.trim()}`,
+      type: "Payment",
+    })
 
-      setPaymentMessage(
-        "Payment details successfully submit ho gayi hain. Admin verification ke baad payment approve hogi."
-      )
-      setPaymentAmount("")
-      setUtr("")
-    } catch (err) {
-      console.error("Payment Error:", err)
-      setPaymentMessage(
-        "Payment submit nahi ho payi. Please dobara try karein."
-      )
-    } finally {
-      setPaymentLoading(false)
-    }
+    setPaymentMessage(
+      "Payment details successfully submit ho gayi hain. Admin verification ke baad payment approve hogi."
+    )
+
+    setPaymentAmount("")
+    setUtr("")
+  } catch (err) {
+    console.error(
+      "Payment Error:",
+      err
+    )
+
+    setPaymentMessage(
+      "Payment submit nahi ho payi. Please dobara try karein."
+    )
+  } finally {
+    setPaymentLoading(false)
   }
+}
 
   // =========================
   // LOAD STUDENT RESULTS

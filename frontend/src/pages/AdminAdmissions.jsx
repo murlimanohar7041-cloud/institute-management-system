@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import {
   collection,
@@ -19,11 +19,8 @@ function AdminAdmissions({ branch }) {
   // =========================
   // LOAD ADMISSION ENQUIRIES
   // =========================
-  useEffect(() => {
-    loadAdmissions()
-  }, [branch])
+ const loadAdmissions = useCallback(async () => {
 
-  const loadAdmissions = async () => {
     try {
       setLoading(true)
 
@@ -50,10 +47,14 @@ function AdminAdmissions({ branch }) {
     } catch (error) {
       console.error("Error loading admissions:", error)
       alert("Admissions load nahi ho pa raha hai.")
-    } finally {
-      setLoading(false)
-    }
+      } finally {
+    setLoading(false)
   }
+}, [branch])
+
+useEffect(() => {
+  loadAdmissions()
+}, [loadAdmissions])
 
   // =========================
   // GENERATE STUDENT ID
