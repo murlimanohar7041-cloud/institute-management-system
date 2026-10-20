@@ -29,38 +29,61 @@ export default function AdminDashboard() {
   const [activePage, setActivePage] = useState("Dashboard")
   const [branch, setBranch] = useState("Itimha")
   const [newEnquiries, setNewEnquiries] = useState(0)
-  const [studentNotificationCount, setStudentNotificationCount] = useState(0)
+  const [studentNotificationCount, setStudentNotificationCount] =
+    useState(0)
 
-  // NEW: Notification popup
-  const [showEnquiryNotification, setShowEnquiryNotification] = useState(false)
+  const [showEnquiryNotification, setShowEnquiryNotification] =
+    useState(false)
   const [notificationMessage, setNotificationMessage] = useState("")
 
-  // First Firestore load ko notification banne se rokne ke liye
-  const firstLoad = useRef(true)
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" &&
+      window.innerWidth <= 900
+  )
 
-  // Responsive layout state
-  const [isMobile, setIsMobile] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  const firstLoad = useRef(true)
+  const notificationTimer = useRef(null)
+
+  /* ============================= */
+  /* MOBILE SCREEN CHECK */
+  /* ============================= */
+
   useEffect(() => {
-    const checkScreen = () => {
+    const handleResize = () => {
       const mobile = window.innerWidth <= 900
+
       setIsMobile(mobile)
-      if (!mobile) setSidebarOpen(false)
+
+      if (!mobile) {
+        setSidebarOpen(false)
+      }
     }
 
-    checkScreen()
-    window.addEventListener("resize", checkScreen)
+    handleResize()
 
-    return () => window.removeEventListener("resize", checkScreen)
+    window.addEventListener("resize", handleResize)
+
+    return () => {
+      window.removeEventListener("resize", handleResize)
+    }
   }, [])
 
-  const handleMenuClick = (page) => {
-    setActivePage(page)
-    if (isMobile) setSidebarOpen(false)
-  }
+  /* ============================= */
+  /* CLOSE MOBILE MENU ON PAGE CHANGE */
+  /* ============================= */
 
-  // Realtime student -> admin notifications
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarOpen(false)
+    }
+  }, [activePage, isMobile])
+
+  /* ============================= */
+  /* STUDENT NOTIFICATIONS */
+  /* ============================= */
+
   useEffect(() => {
     const q = query(
       collection(db, "adminNotifications"),
@@ -73,17 +96,31 @@ export default function AdminDashboard() {
         const unread = snapshot.docs.filter(
           (item) => item.data().read !== true
         ).length
+
         setStudentNotificationCount(unread)
       },
       (error) => {
-        console.error("Student notification listener error:", error)
+        console.error(
+          "Student notification listener error:",
+          error
+        )
       }
     )
 
-    return () => unsubscribe()
+    return () => {
+  unsubscribe()
+
+  if (notificationTimer.current) {
+    clearTimeout(notificationTimer.current)
+    notificationTimer.current = null
+  }
+}
   }, [branch])
 
-  // New Admission Enquiry count + Notification
+  /* ============================= */
+  /* ADMISSION ENQUIRY NOTIFICATION */
+  /* ============================= */
+
   useEffect(() => {
     firstLoad.current = true
 
@@ -95,33 +132,44 @@ export default function AdminDashboard() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const count = snapshot.docs.filter((doc) => {
-          const data = doc.data()
-          const status = String(data.status || "").toLowerCase()
+        const count = snapshot.docs.filter((docItem) => {
+          const data = docItem.data()
 
-          return status === "new" || status === "pending"
+          const status = String(
+            data.status || ""
+          ).toLowerCase()
+
+          return (
+            status === "new" ||
+            status === "pending"
+          )
         }).length
 
         setNewEnquiries(count)
 
-        // First time data load par notification nahi dikhana
         if (firstLoad.current) {
           firstLoad.current = false
           return
         }
 
-        // Sirf NEW admission enquiry par notification
-        const addedEnquiry = snapshot.docChanges().find(
-          (change) => change.type === "added"
-        )
+        const addedEnquiry =
+          snapshot.docChanges().find(
+            (change) => change.type === "added"
+          )
 
         if (addedEnquiry) {
           const data = addedEnquiry.doc.data()
 
-          const status = String(data.status || "").toLowerCase()
+          const status = String(
+            data.status || ""
+          ).toLowerCase()
 
-          if (status === "new" || status === "pending") {
-            const studentName = data.name || "New Student"
+          if (
+            status === "new" ||
+            status === "pending"
+          ) {
+            const studentName =
+              data.name || "New Student"
 
             setNotificationMessage(
               `${studentName} ne new admission enquiry submit ki hai.`
@@ -129,18 +177,28 @@ export default function AdminDashboard() {
 
             setShowEnquiryNotification(true)
 
-            // 5 second baad popup automatically hide
-            setTimeout(() => {
-              setShowEnquiryNotification(false)
-            }, 5000)
+            if (notificationTimer.current) {
+  clearTimeout(notificationTimer.current)
+}
 
-            // Browser notification
+notificationTimer.current = setTimeout(() => {
+  setShowEnquiryNotification(false)
+  notificationTimer.current = null
+}, 5000)
+
             if ("Notification" in window) {
-              if (Notification.permission === "granted") {
-                new Notification("J. Solution Classes", {
-                  body: `${studentName} ne new admission enquiry submit ki hai.`,
-                })
-              } else if (Notification.permission === "default") {
+              if (
+                Notification.permission === "granted"
+              ) {
+                new Notification(
+                  "J. Solution Classes",
+                  {
+                    body: `${studentName} ne new admission enquiry submit ki hai.`,
+                  }
+                )
+              } else if (
+                Notification.permission === "default"
+              ) {
                 Notification.requestPermission()
               }
             }
@@ -148,12 +206,26 @@ export default function AdminDashboard() {
         }
       },
       (error) => {
-        console.error("Admission notification error:", error)
+        console.error(
+          "Admission notification error:",
+          error
+        )
       }
     )
 
-    return () => unsubscribe()
+    return () => {
+  unsubscribe()
+
+  if (notificationTimer.current) {
+    clearTimeout(notificationTimer.current)
+    notificationTimer.current = null
+  }
+}
   }, [branch])
+
+  /* ============================= */
+  /* LOGOUT */
+  /* ============================= */
 
   const handleLogout = async () => {
     try {
@@ -165,94 +237,185 @@ export default function AdminDashboard() {
     }
   }
 
+  /* ============================= */
+  /* ADMISSION PAGE */
+  /* ============================= */
+
   const openAdmissionEnquiries = () => {
     setShowEnquiryNotification(false)
     setActivePage("Admission Enquiries")
-    if (isMobile) setSidebarOpen(false)
   }
 
+  /* ============================= */
+  /* MENU ITEMS */
+  /* ============================= */
+
   const menuItems = [
-    { name: "Dashboard", icon: "📊" },
-    { name: "Students", icon: "👨‍🎓" },
-    { name: "Classes", icon: "📚" },
-    { name: "Study Materials", icon: "📖" },
-    { name: "Results", icon: "📈" },
-    { name: "Fees", icon: "💰" },
-    { name: "Payments", icon: "💳" },
-    { name: "Notices", icon: "📢" },
-    { name: "Certificates", icon: "📜" },
-    { name: "Student Locations", icon: "📍" },
-    { name: "Send Notification", icon: "🔔" },
-    { name: "Student Notifications", icon: "📨", badge: studentNotificationCount },
+    {
+      name: "Dashboard",
+      icon: "📊",
+    },
+    {
+      name: "Students",
+      icon: "👨‍🎓",
+    },
+    {
+      name: "Classes",
+      icon: "📚",
+    },
+    {
+      name: "Study Materials",
+      icon: "📖",
+    },
+    {
+      name: "Results",
+      icon: "📈",
+    },
+    {
+      name: "Fees",
+      icon: "💰",
+    },
+    {
+      name: "Payments",
+      icon: "💳",
+    },
+    {
+      name: "Notices",
+      icon: "📢",
+    },
+    {
+      name: "Certificates",
+      icon: "📜",
+    },
+    {
+      name: "Student Locations",
+      icon: "📍",
+    },
+    {
+      name: "Send Notification",
+      icon: "🔔",
+    },
+    {
+      name: "Student Notifications",
+      icon: "📨",
+      badge: studentNotificationCount,
+    },
     {
       name: "Admission Enquiries",
       icon: "📝",
       badge: newEnquiries,
     },
-    { name: "Faculty Management", icon: "👨‍🏫" },
-    { name: "Settings", icon: "⚙️" },
+    {
+      name: "Faculty Management",
+      icon: "👨‍🏫",
+    },
+    {
+      name: "Settings",
+      icon: "⚙️",
+    },
   ]
 
+  /* ============================= */
+  /* PAGE RENDER */
+  /* ============================= */
+
   const renderPage = () => {
-    if (activePage === "Students") return <Students branch={branch} />
+    if (activePage === "Students") {
+      return <Students branch={branch} />
+    }
 
-    if (activePage === "Classes")
+    if (activePage === "Classes") {
       return <AdminClasses branch={branch} />
+    }
 
-    if (activePage === "Study Materials")
-      return <AdminStudyMaterials branch={branch} />
+    if (activePage === "Study Materials") {
+      return (
+        <AdminStudyMaterials branch={branch} />
+      )
+    }
 
-    if (activePage === "Results")
+    if (activePage === "Results") {
       return <AdminResults branch={branch} />
+    }
 
-    if (activePage === "Fees")
+    if (activePage === "Fees") {
       return <AdminFees branch={branch} />
+    }
 
-    if (activePage === "Payments")
+    if (activePage === "Payments") {
       return <AdminPayments branch={branch} />
+    }
 
-    if (activePage === "Notices")
+    if (activePage === "Notices") {
       return <AdminNotices branch={branch} />
+    }
 
-    if (activePage === "Certificates")
-      return <AdminCertificates branch={branch} />
+    if (activePage === "Certificates") {
+      return (
+        <AdminCertificates branch={branch} />
+      )
+    }
 
-    if (activePage === "Student Locations")
-      return <AdminStudentLocations branch={branch} />
+    if (activePage === "Student Locations") {
+      return (
+        <AdminStudentLocations
+          branch={branch}
+        />
+      )
+    }
 
-    if (activePage === "Send Notification")
-      return <AdminNotifications branch={branch} />
+    if (activePage === "Send Notification") {
+      return (
+        <AdminNotifications branch={branch} />
+      )
+    }
 
-    if (activePage === "Student Notifications")
-      return <AdminStudentNotifications branch={branch} />
+    if (activePage === "Student Notifications") {
+      return (
+        <AdminStudentNotifications
+          branch={branch}
+        />
+      )
+    }
 
+    if (activePage === "Admission Enquiries") {
+      return (
+        <AdminAdmissions branch={branch} />
+      )
+    }
 
-
-    if (activePage === "Admission Enquiries")
-      return <AdminAdmissions branch={branch} />
-
-    if (activePage === "Faculty Management")
+    if (activePage === "Faculty Management") {
       return <FacultyManagement />
+    }
 
-    if (activePage === "Settings")
+    if (activePage === "Settings") {
       return <AdminSettings branch={branch} />
+    }
 
     return (
-      <div
-        style={{
-          ...styles.dashboard,
-          ...(isMobile ? styles.mobileDashboard : {}),
-        }}
-      >
+      <div style={styles.dashboard}>
+        {/* ============================= */}
+        {/* WELCOME CARD */}
+        {/* ============================= */}
+
         <div
           style={{
             ...styles.welcomeCard,
-            ...(isMobile ? styles.mobileWelcomeCard : {}),
+            ...(isMobile
+              ? styles.mobileWelcomeCard
+              : {}),
           }}
         >
           <div style={styles.welcomeGlow} />
 
-          <div style={{ position: "relative", zIndex: 1 }}>
+          <div
+            style={{
+              position: "relative",
+              zIndex: 1,
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
             <div style={styles.welcomeBadge}>
               ADMIN PANEL
             </div>
@@ -260,14 +423,17 @@ export default function AdminDashboard() {
             <h1>Welcome, Admin 👋</h1>
 
             <p>
-              Manage your J. Solution Classes — {branch} Branch
+              Manage your J. Solution Classes —{" "}
+              {branch} Branch
             </p>
           </div>
 
           <div
             style={{
               ...styles.branchBox,
-              ...(isMobile ? styles.mobileBranchBox : {}),
+              ...(isMobile
+                ? styles.mobileBranchBox
+                : {}),
               position: "relative",
               zIndex: 1,
             }}
@@ -276,58 +442,62 @@ export default function AdminDashboard() {
 
             <select
               value={branch}
-              onChange={(e) => setBranch(e.target.value)}
+              onChange={(e) =>
+                setBranch(e.target.value)
+              }
               style={styles.select}
             >
-              <option value="Itimha">Itimha</option>
-              <option value="Bardiha">Bardiha</option>
+              <option value="Itimha">
+                Itimha
+              </option>
+
+              <option value="Bardiha">
+                Bardiha
+              </option>
             </select>
           </div>
         </div>
 
+        {/* ============================= */}
+        {/* STATS */}
+        {/* ============================= */}
+
         <div
           style={{
             ...styles.statsGrid,
-            ...(isMobile ? styles.mobileStatsGrid : {}),
+            ...(isMobile
+              ? styles.mobileStatsGrid
+              : {}),
           }}
         >
-          <div
-            style={{
-              ...styles.statCard,
-              ...(isMobile ? styles.mobileStatCard : {}),
-            }}
-          >
-            <div style={styles.statIcon}>👨‍🎓</div>
+          <div style={styles.statCard}>
+            <div style={styles.statIcon}>
+              👨‍🎓
+            </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <p>Total Students</p>
               <h2>0</h2>
             </div>
           </div>
 
-          <div
-            style={{
-              ...styles.statCard,
-              ...(isMobile ? styles.mobileStatCard : {}),
-            }}
-          >
-            <div style={styles.statIcon}>📈</div>
+          <div style={styles.statCard}>
+            <div style={styles.statIcon}>
+              📈
+            </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <p>Results</p>
               <h2>0</h2>
             </div>
           </div>
 
-          <div
-            style={{
-              ...styles.statCard,
-              ...(isMobile ? styles.mobileStatCard : {}),
-            }}
-          >
-            <div style={styles.statIcon}>💰</div>
+          <div style={styles.statCard}>
+            <div style={styles.statIcon}>
+              💰
+            </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <p>Fees</p>
               <h2>0</h2>
             </div>
@@ -336,14 +506,23 @@ export default function AdminDashboard() {
           <div
             style={{
               ...styles.statCard,
-              ...(isMobile ? styles.mobileStatCard : {}),
-              cursor: newEnquiries > 0 ? "pointer" : "default",
+              cursor:
+                newEnquiries > 0
+                  ? "pointer"
+                  : "default",
             }}
             onClick={openAdmissionEnquiries}
           >
-            <div style={styles.statIcon}>📝</div>
+            <div style={styles.statIcon}>
+              📝
+            </div>
 
-            <div style={{ position: "relative" }}>
+            <div
+              style={{
+                position: "relative",
+                minWidth: 0,
+              }}
+            >
               <p>New Enquiries</p>
 
               <h2>{newEnquiries}</h2>
@@ -357,31 +536,31 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div
-          style={{
-            ...styles.quickCard,
-            ...(isMobile ? styles.mobileQuickCard : {}),
-          }}
-        >
-          <div
-            style={{
-              ...styles.sectionHeader,
-              ...(isMobile ? styles.mobileSectionHeader : {}),
-            }}
-          >
-            <div>
+        {/* ============================= */}
+        {/* QUICK ACTIONS */}
+        {/* ============================= */}
+
+        <div style={styles.quickCard}>
+          <div style={styles.sectionHeader}>
+            <div style={{ minWidth: 0 }}>
               <h2>Quick Actions</h2>
 
-              <p>Frequently used admin controls</p>
+              <p>
+                Frequently used admin controls
+              </p>
             </div>
 
             {newEnquiries > 0 && (
               <button
-                onClick={openAdmissionEnquiries}
+                onClick={
+                  openAdmissionEnquiries
+                }
                 style={styles.enquiryAlert}
               >
                 🔔 {newEnquiries} New Enquiry
-                {newEnquiries > 1 ? "ies" : ""}
+                {newEnquiries > 1
+                  ? "ies"
+                  : ""}
               </button>
             )}
           </div>
@@ -389,92 +568,126 @@ export default function AdminDashboard() {
           <div
             style={{
               ...styles.quickGrid,
-              ...(isMobile ? styles.mobileQuickGrid : {}),
+              ...(isMobile
+                ? styles.mobileQuickGrid
+                : {}),
             }}
           >
             <button
-              onClick={() => handleMenuClick("Students")}
-              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={() =>
+                setActivePage("Students")
+              }
+              style={styles.quickButton}
             >
               <span>👨‍🎓</span>
               <span>Manage Students</span>
             </button>
 
             <button
-              onClick={() => handleMenuClick("Results")}
-              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={() =>
+                setActivePage("Results")
+              }
+              style={styles.quickButton}
             >
               <span>📈</span>
               <span>Manage Results</span>
             </button>
 
             <button
-              onClick={() => handleMenuClick("Fees")}
-              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={() =>
+                setActivePage("Fees")
+              }
+              style={styles.quickButton}
             >
               <span>💰</span>
               <span>Manage Fees</span>
             </button>
 
             <button
-              onClick={() => handleMenuClick("Payments")}
-              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={() =>
+                setActivePage("Payments")
+              }
+              style={styles.quickButton}
             >
               <span>💳</span>
               <span>Payments</span>
             </button>
 
             <button
-              onClick={() => handleMenuClick("Notices")}
-              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={() =>
+                setActivePage("Notices")
+              }
+              style={styles.quickButton}
             >
               <span>📢</span>
               <span>Manage Notices</span>
             </button>
 
             <button
-              onClick={() => handleMenuClick("Certificates")}
-              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={() =>
+                setActivePage("Certificates")
+              }
+              style={styles.quickButton}
             >
               <span>📜</span>
               <span>Certificates</span>
             </button>
 
             <button
-              onClick={() => handleMenuClick("Study Materials")}
-              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={() =>
+                setActivePage(
+                  "Study Materials"
+                )
+              }
+              style={styles.quickButton}
             >
               <span>📖</span>
               <span>Study Materials</span>
             </button>
 
             <button
-              onClick={() => handleMenuClick("Student Locations")}
-              style={{ ...styles.quickButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={() =>
+                setActivePage(
+                  "Student Locations"
+                )
+              }
+              style={styles.quickButton}
             >
               <span>📍</span>
               <span>Student Locations</span>
             </button>
 
             <button
-              onClick={() => handleMenuClick("Send Notification")}
-              style={{ ...styles.notificationButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={() =>
+                setActivePage(
+                  "Send Notification"
+                )
+              }
+              style={styles.notificationButton}
             >
               <span>🔔</span>
               <span>Send Notification</span>
             </button>
 
             <button
-              onClick={() => handleMenuClick("Student Notifications")}
-              style={{ ...styles.notificationButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={() =>
+                setActivePage(
+                  "Student Notifications"
+                )
+              }
+              style={styles.notificationButton}
             >
               <span>📨</span>
-              <span>Student Notifications</span>
+              <span>
+                Student Notifications
+              </span>
             </button>
 
             <button
-              onClick={openAdmissionEnquiries}
-              style={{ ...styles.enquiryButton, ...(isMobile ? styles.mobileQuickButton : {}) }}
+              onClick={
+                openAdmissionEnquiries
+              }
+              style={styles.enquiryButton}
             >
               <span>📝</span>
 
@@ -496,23 +709,26 @@ export default function AdminDashboard() {
 
   return (
     <div style={styles.app}>
-
       {/* ============================= */}
-      {/* NEW ADMISSION NOTIFICATION */}
+      {/* ADMISSION POPUP */}
       {/* ============================= */}
 
       {showEnquiryNotification && (
         <div
           style={{
             ...styles.notificationPopup,
-            ...(isMobile ? styles.mobileNotificationPopup : {}),
+            ...(isMobile
+              ? styles.mobileNotificationPopup
+              : {}),
           }}
         >
           <div style={styles.notificationIcon}>
             🔔
           </div>
 
-          <div style={styles.notificationContent}>
+          <div
+            style={styles.notificationContent}
+          >
             <strong>
               New Admission Enquiry
             </strong>
@@ -522,15 +738,21 @@ export default function AdminDashboard() {
             </p>
 
             <button
-              onClick={openAdmissionEnquiries}
-              style={styles.notificationViewButton}
+              onClick={
+                openAdmissionEnquiries
+              }
+              style={
+                styles.notificationViewButton
+              }
             >
               View Enquiry
             </button>
           </div>
 
           <button
-            onClick={() => setShowEnquiryNotification(false)}
+            onClick={() =>
+              setShowEnquiryNotification(false)
+            }
             style={styles.notificationClose}
           >
             ✕
@@ -538,63 +760,84 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {isMobile && (
-        <>
-          <button
-            type="button"
-            aria-label={sidebarOpen ? "Close menu" : "Open menu"}
-            aria-expanded={sidebarOpen}
-            onClick={() => setSidebarOpen((value) => !value)}
-            style={styles.mobileMenuButton}
-          >
-            {sidebarOpen ? "✕" : "☰"}
-          </button>
+      {/* ============================= */}
+      {/* MOBILE OVERLAY */}
+      {/* ============================= */}
 
-          {sidebarOpen && (
-            <button
-              type="button"
-              aria-label="Close navigation overlay"
-              onClick={() => setSidebarOpen(false)}
-              style={styles.sidebarOverlay}
-            />
-          )}
-        </>
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() =>
+            setSidebarOpen(false)
+          }
+          style={styles.mobileOverlay}
+        />
       )}
+
+      {/* ============================= */}
+      {/* SIDEBAR */}
+      {/* ============================= */}
 
       <aside
         style={{
           ...styles.sidebar,
-          ...(isMobile ? styles.mobileSidebar : {}),
-          ...(isMobile && sidebarOpen ? styles.mobileSidebarOpen : {}),
+          ...(isMobile
+            ? {
+                ...styles.mobileSidebar,
+                transform: sidebarOpen
+                  ? "translateX(0)"
+                  : "translateX(-105%)",
+              }
+            : {}),
         }}
       >
-        <div style={styles.logoArea}>
-          <div style={styles.logo}>JS</div>
+        {/* LOGO */}
 
-          <div>
+        <div style={styles.logoArea}>
+          <div style={styles.logo}>
+            JS
+          </div>
+
+          <div
+            style={{
+              minWidth: 0,
+            }}
+          >
             <h2>J. Solution</h2>
             <p>Admin Panel</p>
           </div>
         </div>
+
+        {/* BRANCH */}
 
         <div style={styles.branchSelector}>
           <label>Current Branch</label>
 
           <select
             value={branch}
-            onChange={(e) => setBranch(e.target.value)}
+            onChange={(e) =>
+              setBranch(e.target.value)
+            }
             style={styles.sidebarSelect}
           >
-            <option value="Itimha">Itimha</option>
-            <option value="Bardiha">Bardiha</option>
+            <option value="Itimha">
+              Itimha
+            </option>
+
+            <option value="Bardiha">
+              Bardiha
+            </option>
           </select>
         </div>
+
+        {/* NAVIGATION */}
 
         <nav style={styles.nav}>
           {menuItems.map((item) => (
             <button
               key={item.name}
-              onClick={() => handleMenuClick(item.name)}
+              onClick={() =>
+                setActivePage(item.name)
+              }
               style={{
                 ...styles.navItem,
                 ...(activePage === item.name
@@ -606,7 +849,15 @@ export default function AdminDashboard() {
                 {item.icon}
               </span>
 
-              <span style={{ flex: 1 }}>
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
                 {item.name}
               </span>
 
@@ -619,14 +870,24 @@ export default function AdminDashboard() {
           ))}
         </nav>
 
+        {/* SIDEBAR BOTTOM */}
+
         <div style={styles.sidebarBottom}>
           <div style={styles.adminInfo}>
-            <div style={styles.avatar}>A</div>
+            <div style={styles.avatar}>
+              A
+            </div>
 
-            <div>
+            <div
+              style={{
+                minWidth: 0,
+              }}
+            >
               <strong>Admin</strong>
 
-              <small>Administrator</small>
+              <small>
+                Administrator
+              </small>
             </div>
           </div>
 
@@ -640,88 +901,165 @@ export default function AdminDashboard() {
         </div>
       </aside>
 
+      {/* ============================= */}
+      {/* MAIN */}
+      {/* ============================= */}
+
       <main
         style={{
           ...styles.main,
-          ...(isMobile ? styles.mobileMain : {}),
+          ...(isMobile
+            ? styles.mobileMain
+            : {}),
         }}
       >
-        <header
-          style={{
-            ...styles.header,
-            ...(isMobile ? styles.mobileHeader : {}),
-          }}
-        >
-          <div>
-            <h3
-              style={isMobile ? { fontSize: "16px", maxWidth: "150px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : undefined}
-            >
-              {activePage}
-            </h3>
+        {/* ============================= */}
+        {/* MOBILE HEADER */}
+        {/* ============================= */}
 
-            <p
-              style={isMobile ? { fontSize: "10px", marginTop: "2px", whiteSpace: "nowrap" } : undefined}
-            >
-              J. Solution Classes • {branch}
-            </p>
-          </div>
-
-          <div
-            style={{
-              ...styles.headerRight,
-              ...(isMobile ? styles.mobileHeaderRight : {}),
-            }}
-          >
+        {isMobile && (
+          <header style={styles.mobileHeader}>
             <button
-              onClick={openAdmissionEnquiries}
-              style={styles.headerNotification}
-              title="Admission Enquiries"
+              onClick={() =>
+                setSidebarOpen(
+                  !sidebarOpen
+                )
+              }
+              style={styles.mobileMenuButton}
+              aria-label="Open menu"
             >
-              🔔
-
-              {newEnquiries > 0 && (
-                <span style={styles.headerBadge}>
-                  {newEnquiries}
-                </span>
-              )}
+              {sidebarOpen ? "✕" : "☰"}
             </button>
 
-            {!isMobile && (
+            <div
+              style={styles.mobileHeaderTitle}
+            >
+              <h3>{activePage}</h3>
+
+              <p>
+                J. Solution Classes •{" "}
+                {branch}
+              </p>
+            </div>
+
+            <div
+              style={styles.mobileHeaderActions}
+            >
+              <button
+                onClick={
+                  openAdmissionEnquiries
+                }
+                style={
+                  styles.headerNotification
+                }
+                title="Admission Enquiries"
+              >
+                🔔
+
+                {newEnquiries > 0 && (
+                  <span
+                    style={styles.headerBadge}
+                  >
+                    {newEnquiries}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={handleLogout}
+                style={styles.mobileLogout}
+                title="Logout"
+              >
+                🚪
+              </button>
+            </div>
+          </header>
+        )}
+
+        {/* ============================= */}
+        {/* DESKTOP HEADER */}
+        {/* ============================= */}
+
+        {!isMobile && (
+          <header style={styles.header}>
+            <div
+              style={{
+                minWidth: 0,
+              }}
+            >
+              <h3>{activePage}</h3>
+
+              <p>
+                J. Solution Classes •{" "}
+                {branch}
+              </p>
+            </div>
+
+            <div style={styles.headerRight}>
+              <button
+                onClick={
+                  openAdmissionEnquiries
+                }
+                style={
+                  styles.headerNotification
+                }
+                title="Admission Enquiries"
+              >
+                🔔
+
+                {newEnquiries > 0 && (
+                  <span
+                    style={styles.headerBadge}
+                  >
+                    {newEnquiries}
+                  </span>
+                )}
+              </button>
+
               <div style={styles.headerBranch}>
                 <span>🏫</span>
                 <span>Branch:</span>
                 <strong>{branch}</strong>
               </div>
-            )}
 
-            <button
-              onClick={handleLogout}
-              style={{
-                ...styles.headerLogout,
-                ...(isMobile ? { padding: "9px 10px", fontSize: "11px" } : {}),
-              }}
-            >
-              {isMobile ? "🚪" : "🚪 Logout"}
-            </button>
-          </div>
-        </header>
+              <button
+                onClick={handleLogout}
+                style={styles.headerLogout}
+              >
+                🚪 Logout
+              </button>
+            </div>
+          </header>
+        )}
+
+        {/* ============================= */}
+        {/* PAGE CONTENT */}
+        {/* ============================= */}
 
         <section
           style={{
             ...styles.content,
-            ...(isMobile ? styles.mobileContent : {}),
+            ...(isMobile
+              ? styles.mobileContent
+              : {}),
           }}
         >
-          <div style={styles.pageViewport}>
-            {renderPage()}
-          </div>
+          {renderPage()}
         </section>
       </main>
     </div>
   )
 }
 
+/* ================================================= */
+/* STYLES */
+/* ================================================= */
+
 const styles = {
+  /* ============================= */
+  /* APP */
+  /* ============================= */
+
   app: {
     display: "flex",
     minHeight: "100vh",
@@ -731,25 +1069,40 @@ const styles = {
     background: "#f5f7fb",
     fontFamily:
       "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
+    boxSizing: "border-box",
   },
 
-  /* NEW NOTIFICATION POPUP */
+  /* ============================= */
+  /* NOTIFICATION POPUP */
+  /* ============================= */
+
   notificationPopup: {
     position: "fixed",
-    top: "22px",
+    top: "90px",
     right: "25px",
     zIndex: 9999,
     width: "360px",
-    maxWidth: "calc(100vw - 40px)",
+    maxWidth:
+      "calc(100vw - 40px)",
     background: "#ffffff",
-    border: "1px solid #fecaca",
+    border:
+      "1px solid #fecaca",
     borderRadius: "16px",
     padding: "16px",
     display: "flex",
     alignItems: "flex-start",
     gap: "12px",
-    boxShadow: "0 15px 40px rgba(20,40,80,0.18)",
+    boxShadow:
+      "0 15px 40px rgba(20,40,80,0.18)",
     boxSizing: "border-box",
+  },
+
+  mobileNotificationPopup: {
+    top: "78px",
+    right: "12px",
+    left: "12px",
+    width: "auto",
+    maxWidth: "none",
   },
 
   notificationIcon: {
@@ -767,17 +1120,6 @@ const styles = {
   notificationContent: {
     flex: 1,
     minWidth: 0,
-  },
-
-  notificationContentStrong: {
-    color: "#172033",
-  },
-
-  notificationContentP: {
-    margin: "5px 0 10px",
-    color: "#687386",
-    fontSize: "13px",
-    lineHeight: 1.4,
   },
 
   notificationViewButton: {
@@ -800,31 +1142,63 @@ const styles = {
     padding: "2px",
   },
 
+  /* ============================= */
+  /* DESKTOP SIDEBAR */
+  /* ============================= */
+
   sidebar: {
     width: "270px",
     minWidth: "270px",
     background:
       "linear-gradient(180deg, #ffffff 0%, #fbfcff 100%)",
-    borderRight: "1px solid #e6eaf0",
+    borderRight:
+      "1px solid #e6eaf0",
     display: "flex",
     flexDirection: "column",
     position: "fixed",
     top: 0,
     left: 0,
     bottom: 0,
-    overflowY: "auto",
-    overflowX: "hidden",
+    height: "100vh",
+    overflow: "hidden",
     boxSizing: "border-box",
     boxShadow:
-      "8px 0 30px rgba(30, 50, 90, 0.04)",
+      "8px 0 30px rgba(30,50,90,0.04)",
+    zIndex: 2200,
   },
+
+  /* ============================= */
+  /* MOBILE SIDEBAR */
+  /* ============================= */
+
+  mobileSidebar: {
+    width: "min(380px, 88vw)",
+    minWidth: 0,
+    top: "68px",
+    bottom: 0,
+    height:
+      "calc(100vh - 68px)",
+    zIndex: 2400,
+    transition:
+      "transform 0.25s ease",
+    boxShadow:
+      "10px 0 35px rgba(20,40,80,0.18)",
+  },
+
+  /* ============================= */
+  /* LOGO */
+  /* ============================= */
 
   logoArea: {
     display: "flex",
     alignItems: "center",
     gap: "12px",
     padding: "22px 20px",
-    borderBottom: "1px solid #edf0f4",
+    minHeight: "92px",
+    boxSizing: "border-box",
+    borderBottom:
+      "1px solid #edf0f4",
+    flexShrink: 0,
   },
 
   logo: {
@@ -857,10 +1231,16 @@ const styles = {
     fontSize: "12px",
   },
 
+  /* ============================= */
+  /* BRANCH */
+  /* ============================= */
+
   branchSelector: {
     padding: "18px 20px",
     background: "#f8faff",
-    borderBottom: "1px solid #edf0f4",
+    borderBottom:
+      "1px solid #edf0f4",
+    flexShrink: 0,
   },
 
   "branchSelector label": {
@@ -877,7 +1257,8 @@ const styles = {
     width: "100%",
     padding: "11px 12px",
     borderRadius: "10px",
-    border: "1px solid #dfe5ef",
+    border:
+      "1px solid #dfe5ef",
     background: "#fff",
     fontWeight: "700",
     color: "#25324a",
@@ -886,9 +1267,17 @@ const styles = {
     cursor: "pointer",
   },
 
+  /* ============================= */
+  /* NAV */
+  /* ============================= */
+
   nav: {
     padding: "14px 12px",
     boxSizing: "border-box",
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    overflowX: "hidden",
   },
 
   navItem: {
@@ -898,7 +1287,8 @@ const styles = {
     gap: "12px",
     padding: "12px 14px",
     marginBottom: "5px",
-    border: "1px solid transparent",
+    border:
+      "1px solid transparent",
     borderRadius: "11px",
     background: "transparent",
     cursor: "pointer",
@@ -908,13 +1298,14 @@ const styles = {
     fontWeight: "650",
     boxSizing: "border-box",
     transition:
-      "background 0.2s ease, color 0.2s ease, transform 0.2s ease",
+      "background 0.2s ease, color 0.2s ease",
   },
 
   activeNavItem: {
     background: "#fff0f1",
     color: "#c62828",
-    border: "1px solid #ffd8da",
+    border:
+      "1px solid #ffd8da",
     boxShadow:
       "0 5px 15px rgba(211,47,47,0.07)",
   },
@@ -938,13 +1329,19 @@ const styles = {
     justifyContent: "center",
     fontSize: "11px",
     fontWeight: "900",
+    flexShrink: 0,
   },
 
+  /* ============================= */
+  /* SIDEBAR BOTTOM */
+  /* ============================= */
+
   sidebarBottom: {
-    marginTop: "auto",
     padding: "16px",
-    borderTop: "1px solid #edf0f4",
+    borderTop:
+      "1px solid #edf0f4",
     background: "#fff",
+    flexShrink: 0,
   },
 
   adminInfo: {
@@ -954,6 +1351,7 @@ const styles = {
     padding: "8px",
     borderRadius: "12px",
     background: "#f8faff",
+    minWidth: 0,
   },
 
   avatar: {
@@ -987,7 +1385,8 @@ const styles = {
     width: "100%",
     marginTop: "12px",
     padding: "11px 14px",
-    border: "1px solid #fecaca",
+    border:
+      "1px solid #fecaca",
     borderRadius: "10px",
     background: "#fff5f5",
     color: "#c62828",
@@ -998,23 +1397,54 @@ const styles = {
     justifyContent: "center",
     gap: "8px",
     boxSizing: "border-box",
-    transition: "all 0.2s ease",
   },
+
+  /* ============================= */
+  /* DESKTOP MAIN */
+  /* ============================= */
 
   main: {
     marginLeft: "270px",
-    width: "calc(100% - 270px)",
+    width:
+      "calc(100% - 270px)",
     minWidth: 0,
-    maxWidth: "calc(100% - 270px)",
+    maxWidth:
+      "calc(100% - 270px)",
+    minHeight: "100vh",
     overflowX: "hidden",
     boxSizing: "border-box",
+    paddingTop: "74px",
   },
 
-  header: {
-    minHeight: "74px",
+  /* ============================= */
+  /* MOBILE MAIN */
+  /* ============================= */
+
+  mobileMain: {
+    marginLeft: 0,
     width: "100%",
-    background: "rgba(255,255,255,0.96)",
-    borderBottom: "1px solid #e9edf3",
+    maxWidth: "100%",
+    minWidth: 0,
+    paddingTop: "68px",
+    overflowX: "hidden",
+  },
+
+  /* ============================= */
+  /* DESKTOP HEADER */
+  /* ============================= */
+
+  header: {
+    position: "fixed",
+    top: 0,
+    left: "270px",
+    right: 0,
+    minHeight: "74px",
+    width:
+      "calc(100% - 270px)",
+    background:
+      "rgba(255,255,255,0.97)",
+    borderBottom:
+      "1px solid #e9edf3",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1022,6 +1452,7 @@ const styles = {
     padding: "12px 28px",
     boxSizing: "border-box",
     overflow: "hidden",
+    zIndex: 2300,
   },
 
   "header h3": {
@@ -1037,10 +1468,15 @@ const styles = {
     fontSize: "12px",
   },
 
+  /* ============================= */
+  /* DESKTOP HEADER RIGHT */
+  /* ============================= */
+
   headerRight: {
     display: "flex",
     alignItems: "center",
     gap: "10px",
+    flexShrink: 0,
   },
 
   headerNotification: {
@@ -1048,7 +1484,8 @@ const styles = {
     width: "42px",
     height: "42px",
     borderRadius: "10px",
-    border: "1px solid #fecaca",
+    border:
+      "1px solid #fecaca",
     background: "#fff5f5",
     color: "#c62828",
     fontSize: "20px",
@@ -1056,6 +1493,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
 
   headerBadge: {
@@ -1068,7 +1506,8 @@ const styles = {
     borderRadius: "999px",
     background: "#dc2626",
     color: "#fff",
-    border: "2px solid #fff",
+    border:
+      "2px solid #fff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1087,11 +1526,13 @@ const styles = {
     fontSize: "12px",
     whiteSpace: "nowrap",
     flexShrink: 0,
-    border: "1px solid #e1eaff",
+    border:
+      "1px solid #e1eaff",
   },
 
   headerLogout: {
-    border: "1px solid #fecaca",
+    border:
+      "1px solid #fecaca",
     background: "#fff5f5",
     color: "#c62828",
     padding: "10px 13px",
@@ -1099,22 +1540,119 @@ const styles = {
     fontWeight: "750",
     cursor: "pointer",
     whiteSpace: "nowrap",
+    flexShrink: 0,
   },
+
+  /* ============================= */
+  /* MOBILE HEADER */
+  /* ============================= */
+
+  mobileHeader: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    width: "100%",
+    height: "68px",
+    minHeight: "68px",
+    background:
+      "rgba(255,255,255,0.98)",
+    borderBottom:
+      "1px solid #e9edf3",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "8px 12px",
+    boxSizing: "border-box",
+    zIndex: 2300,
+    boxShadow:
+      "0 4px 18px rgba(20,40,80,0.05)",
+  },
+
+  mobileMenuButton: {
+    width: "46px",
+    height: "46px",
+    minWidth: "46px",
+    borderRadius: "13px",
+    border:
+      "1px solid #dbe3ef",
+    background: "#fff",
+    color: "#16458f",
+    fontSize: "27px",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow:
+      "0 5px 16px rgba(20,40,80,0.08)",
+  },
+
+  mobileHeaderTitle: {
+    minWidth: 0,
+    flex: 1,
+    overflow: "hidden",
+  },
+
+  mobileHeaderActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "7px",
+    flexShrink: 0,
+  },
+
+  mobileLogout: {
+    width: "42px",
+    height: "42px",
+    borderRadius: "10px",
+    border:
+      "1px solid #fecaca",
+    background: "#fff5f5",
+    color: "#c62828",
+    fontSize: "17px",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  /* ============================= */
+  /* CONTENT */
+  /* ============================= */
 
   content: {
     width: "100%",
     maxWidth: "100%",
+    minWidth: 0,
     padding: "28px",
     boxSizing: "border-box",
     overflowX: "hidden",
   },
+
+  mobileContent: {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    padding:
+      "18px 12px 28px",
+    overflowX: "hidden",
+    boxSizing: "border-box",
+  },
+
+  /* ============================= */
+  /* DASHBOARD */
+  /* ============================= */
 
   dashboard: {
     width: "100%",
     maxWidth: "1200px",
     margin: "0 auto",
     boxSizing: "border-box",
+    minWidth: 0,
   },
+
+  /* ============================= */
+  /* WELCOME CARD */
+  /* ============================= */
 
   welcomeCard: {
     width: "100%",
@@ -1131,7 +1669,16 @@ const styles = {
     boxSizing: "border-box",
     boxShadow:
       "0 12px 35px rgba(20,40,80,0.07)",
-    border: "1px solid #e6ecf7",
+    border:
+      "1px solid #e6ecf7",
+  },
+
+  mobileWelcomeCard: {
+    padding: "24px 18px",
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: "18px",
+    borderRadius: "18px",
   },
 
   welcomeGlow: {
@@ -1139,7 +1686,8 @@ const styles = {
     width: "200px",
     height: "200px",
     borderRadius: "50%",
-    background: "rgba(25,118,210,0.08)",
+    background:
+      "rgba(25,118,210,0.08)",
     right: "-70px",
     top: "-80px",
   },
@@ -1161,17 +1709,26 @@ const styles = {
     color: "#172033",
     fontSize: "28px",
     fontWeight: "850",
+    lineHeight: 1.25,
   },
 
   "welcomeCard p": {
     margin: "8px 0 0",
     color: "#687386",
     fontSize: "14px",
+    lineHeight: 1.5,
   },
 
   branchBox: {
     minWidth: "180px",
     maxWidth: "220px",
+    flexShrink: 0,
+  },
+
+  mobileBranchBox: {
+    width: "100%",
+    minWidth: 0,
+    maxWidth: "100%",
   },
 
   "branchBox label": {
@@ -1186,13 +1743,18 @@ const styles = {
     width: "100%",
     padding: "11px",
     borderRadius: "10px",
-    border: "1px solid #d8e0ed",
+    border:
+      "1px solid #d8e0ed",
     boxSizing: "border-box",
     background: "#fff",
     color: "#25324a",
     fontWeight: "700",
     outline: "none",
   },
+
+  /* ============================= */
+  /* STATS */
+  /* ============================= */
 
   statsGrid: {
     display: "grid",
@@ -1203,10 +1765,18 @@ const styles = {
     width: "100%",
   },
 
+  mobileStatsGrid: {
+    gridTemplateColumns:
+      "repeat(2, minmax(0, 1fr))",
+    gap: "12px",
+    marginTop: "14px",
+  },
+
   statCard: {
     minWidth: 0,
     background: "#fff",
-    border: "1px solid #edf0f5",
+    border:
+      "1px solid #edf0f5",
     borderRadius: "16px",
     padding: "21px",
     display: "flex",
@@ -1215,8 +1785,6 @@ const styles = {
     boxSizing: "border-box",
     boxShadow:
       "0 8px 24px rgba(20,40,80,0.06)",
-    transition:
-      "transform 0.2s ease, box-shadow 0.2s ease",
   },
 
   statIcon: {
@@ -1256,6 +1824,10 @@ const styles = {
     fontWeight: "900",
   },
 
+  /* ============================= */
+  /* QUICK CARD */
+  /* ============================= */
+
   quickCard: {
     width: "100%",
     background: "#fff",
@@ -1265,7 +1837,9 @@ const styles = {
     boxSizing: "border-box",
     boxShadow:
       "0 10px 30px rgba(20,40,80,0.06)",
-    border: "1px solid #edf0f5",
+    border:
+      "1px solid #edf0f5",
+    minWidth: 0,
   },
 
   sectionHeader: {
@@ -1290,7 +1864,8 @@ const styles = {
   },
 
   enquiryAlert: {
-    border: "1px solid #fecaca",
+    border:
+      "1px solid #fecaca",
     background: "#fff5f5",
     color: "#b91c1c",
     padding: "9px 13px",
@@ -1306,13 +1881,21 @@ const styles = {
       "repeat(3, minmax(0, 1fr))",
     gap: "14px",
     width: "100%",
+    minWidth: 0,
+  },
+
+  mobileQuickGrid: {
+    gridTemplateColumns:
+      "repeat(1, minmax(0, 1fr))",
+    gap: "10px",
   },
 
   quickButton: {
     width: "100%",
     minWidth: 0,
     padding: "16px",
-    border: "1px solid #e5eaf2",
+    border:
+      "1px solid #e5eaf2",
     borderRadius: "12px",
     background: "#fff",
     cursor: "pointer",
@@ -1323,7 +1906,6 @@ const styles = {
     alignItems: "center",
     gap: "10px",
     textAlign: "left",
-    transition: "all 0.2s ease",
   },
 
   notificationButton: {
@@ -1351,7 +1933,8 @@ const styles = {
     width: "100%",
     minWidth: 0,
     padding: "16px",
-    border: "1px solid #bfdbfe",
+    border:
+      "1px solid #bfdbfe",
     borderRadius: "12px",
     background: "#eff6ff",
     color: "#1d4ed8",
@@ -1377,155 +1960,21 @@ const styles = {
     justifyContent: "center",
     fontSize: "11px",
     fontWeight: "900",
-  },
-
-  mobileMenuButton: {
-    position: "fixed",
-    top: "12px",
-    left: "12px",
-    zIndex: 2201,
-    width: "44px",
-    height: "44px",
-    borderRadius: "12px",
-    border: "1px solid #dce4f0",
-    background: "#ffffff",
-    color: "#173f91",
-    fontSize: "22px",
-    fontWeight: "900",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: "0 8px 24px rgba(20,40,80,0.14)",
-  },
-
-  sidebarOverlay: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 2000,
-    width: "100%",
-    height: "100%",
-    border: 0,
-    padding: 0,
-    margin: 0,
-    background: "rgba(15,23,42,0.46)",
-    cursor: "pointer",
-  },
-
-  mobileSidebar: {
-    width: "min(310px, 86vw)",
-    minWidth: "0",
-    transform: "translateX(-105%)",
-    zIndex: 2100,
-    transition: "transform 0.25s ease",
-    boxShadow: "18px 0 45px rgba(15,23,42,0.18)",
-  },
-
-  mobileSidebarOpen: {
-    transform: "translateX(0)",
-  },
-
-  mobileMain: {
-    marginLeft: 0,
-    width: "100%",
-    maxWidth: "100%",
-    minWidth: 0,
-  },
-
-  mobileHeader: {
-    minHeight: "68px",
-    padding: "10px 12px 10px 68px",
-    gap: "8px",
-    position: "sticky",
-    top: 0,
-    zIndex: 1000,
-  },
-
-  mobileHeaderRight: {
-    gap: "6px",
     flexShrink: 0,
   },
 
-  mobileContent: {
-    padding: "14px",
-    overflowX: "hidden",
-  },
+  /* ============================= */
+  /* MOBILE OVERLAY */
+  /* ============================= */
 
-  pageViewport: {
-    width: "100%",
-    minWidth: 0,
-    maxWidth: "100%",
-    overflowX: "auto",
-    boxSizing: "border-box",
-    WebkitOverflowScrolling: "touch",
-  },
-
-  mobileDashboard: {
-    width: "100%",
-    maxWidth: "100%",
-  },
-
-  mobileWelcomeCard: {
-    padding: "20px",
-    borderRadius: "16px",
-    flexDirection: "column",
-    alignItems: "stretch",
-    gap: "16px",
-  },
-
-  mobileBranchBox: {
-    minWidth: "0",
-    maxWidth: "100%",
-    width: "100%",
-  },
-
-  mobileStatsGrid: {
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: "10px",
-    marginTop: "14px",
-  },
-
-  mobileStatCard: {
-    padding: "13px",
-    gap: "10px",
-    borderRadius: "13px",
-  },
-
-  mobileQuickButton: {
-    minHeight: "52px",
-    padding: "12px",
-    gap: "8px",
-    fontSize: "12px",
-    borderRadius: "11px",
-  },
-
-  mobileQuickCard: {
-    marginTop: "14px",
-    padding: "17px",
-    borderRadius: "16px",
-  },
-
-  mobileSingleColumn: {
-    gridTemplateColumns: "1fr",
-  },
-
-  mobileQuickGrid: {
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: "10px",
-  },
-
-  mobileSectionHeader: {
-    alignItems: "stretch",
-    flexDirection: "column",
-    gap: "10px",
-  },
-
-  mobileNotificationPopup: {
+  mobileOverlay: {
+    position: "fixed",
     top: "68px",
-    left: "12px",
-    right: "12px",
-    width: "auto",
-    maxWidth: "none",
-    padding: "13px",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background:
+      "rgba(15,23,42,0.42)",
+    zIndex: 2350,
   },
 }

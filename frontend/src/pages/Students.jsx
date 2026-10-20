@@ -1159,230 +1159,297 @@ Delete karne ke baad student ko dobara Admission Enquiry submit karni hogi.`
           </div>
         </div>
 
-        {/* Students Table */}
+       {/* Students Table */}
+<div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+  <div className="p-5 border-b">
+    <h2 className="text-xl font-bold text-gray-900">
+      {displayBranch} Students
+    </h2>
 
-        <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <p className="text-sm text-gray-500 mt-1">
+      Showing{" "}
+      <span className="font-semibold">
+        {filteredStudents.length}
+      </span>{" "}
+      student(s)
+    </p>
+  </div>
 
-          <div className="p-5 border-b">
+  {loading ? (
+    <div className="p-10 text-center text-gray-500">
+      Loading students...
+    </div>
+  ) : filteredStudents.length === 0 ? (
+    <div className="p-10 text-center">
+      <div className="text-5xl mb-4">
+        🎓
+      </div>
 
-            <h2 className="text-xl font-bold text-gray-900">
-              {displayBranch} Students
-            </h2>
+      <h3 className="text-lg font-semibold text-gray-800">
+        No students found
+      </h3>
 
-            <p className="text-sm text-gray-500 mt-1">
-              Showing{" "}
-              <span className="font-semibold">
-                {filteredStudents.length}
-              </span>{" "}
-              student(s)
-            </p>
+      <p className="text-gray-500 mt-1 break-words">
+        {search || classFilter !== "All"
+          ? "Try changing your search or filter."
+          : `No students have been added to ${displayBranch} branch yet.`}
+      </p>
+    </div>
+  ) : (
+    <>
+      {/* =========================
+          DESKTOP / TABLET TABLE
+          ========================= */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
+                Student ID
+              </th>
 
-          </div>
+              <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
+                Student
+              </th>
 
-          {loading ? (
-            <div className="p-10 text-center text-gray-500">
-              Loading students...
-            </div>
-          ) : filteredStudents.length ===
-            0 ? (
-            <div className="p-10 text-center">
+              <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
+                Father Name
+              </th>
 
-              <div className="text-5xl mb-4">
-                🎓
+              <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
+                Mobile
+              </th>
+
+              <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
+                Class
+              </th>
+
+              <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
+                Stream
+              </th>
+
+              <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
+                Branch
+              </th>
+
+              <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
+                Actions
+              </th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y">
+            {filteredStudents.map((student) => (
+              <tr
+                key={
+                  student.firestoreId ||
+                  student.id
+                }
+                className="hover:bg-gray-50"
+              >
+                {/* Student ID */}
+                <td className="px-5 py-4 whitespace-nowrap">
+                  <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 font-bold text-sm">
+                    {student.studentId ||
+                      student.id ||
+                      "N/A"}
+                  </span>
+                </td>
+
+                {/* Student */}
+                <td className="px-5 py-4 align-top">
+                  <div className="w-[180px] lg:w-[220px]">
+                    <p className="font-semibold text-gray-900 break-words whitespace-normal leading-5">
+                      {student.name || "N/A"}
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-500 break-all whitespace-normal leading-5">
+                      {student.email || "N/A"}
+                    </p>
+                  </div>
+                </td>
+
+                {/* Father */}
+                <td className="px-5 py-4 text-gray-700">
+                  <div className="max-w-[180px] break-words">
+                    {student.fatherName || "N/A"}
+                  </div>
+                </td>
+
+                {/* Mobile */}
+                <td className="px-5 py-4 text-gray-700 whitespace-nowrap">
+                  {student.mobile || "N/A"}
+                </td>
+
+                {/* Class */}
+                <td className="px-5 py-4 whitespace-nowrap">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
+                    {student.className || "N/A"}
+                  </span>
+                </td>
+
+                {/* Stream */}
+                <td className="px-5 py-4 text-gray-700 whitespace-nowrap">
+                  {student.stream || "—"}
+                </td>
+
+                {/* Branch */}
+                <td className="px-5 py-4 whitespace-nowrap">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-50 text-green-700 text-sm font-medium">
+                    {student.branch || "N/A"}
+                  </span>
+                </td>
+
+                {/* Actions */}
+                <td className="px-5 py-4">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        editStudent(student)
+                      }
+                      className="px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium text-sm transition"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        deleteStudent(
+                          student.firestoreId,
+                          student.studentId ||
+                            student.id
+                        )
+                      }
+                      className="px-3 py-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 font-medium text-sm transition"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* =========================
+          MOBILE STUDENT CARDS
+          ========================= */}
+      <div className="md:hidden p-4 space-y-4">
+        {filteredStudents.map((student) => (
+          <div
+            key={
+              student.firestoreId ||
+              student.id
+            }
+            className="border border-gray-200 rounded-2xl p-4 bg-white shadow-sm"
+          >
+            {/* Student Header */}
+            <div className="flex items-start justify-between gap-3 pb-4 border-b">
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-gray-900 text-base leading-5 break-words">
+                  {student.name || "N/A"}
+                </p>
+
+                <p className="text-sm text-gray-500 mt-1 leading-5 break-all">
+                  {student.email || "N/A"}
+                </p>
               </div>
 
-              <h3 className="text-lg font-semibold text-gray-800">
-                No students found
-              </h3>
-
-              <p className="text-gray-500 mt-1">
-                {search ||
-                classFilter !== "All"
-                  ? "Try changing your search or filter."
-                  : `No students have been added to ${displayBranch} branch yet.`}
-              </p>
-
+              <span className="shrink-0 inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold text-xs">
+                {student.studentId ||
+                  student.id ||
+                  "N/A"}
+              </span>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
 
-              <table className="w-full min-w-[1100px]">
+            {/* Student Details */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-4 pt-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-500 mb-1">
+                  Father Name
+                </p>
 
-                <thead className="bg-gray-50">
+                <p className="text-sm text-gray-800 break-words leading-5">
+                  {student.fatherName || "N/A"}
+                </p>
+              </div>
 
-                  <tr>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-500 mb-1">
+                  Mobile
+                </p>
 
-                    <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                      Student ID
-                    </th>
+                <p className="text-sm text-gray-800 break-words">
+                  {student.mobile || "N/A"}
+                </p>
+              </div>
 
-                    <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                      Student
-                    </th>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-500 mb-1">
+                  Class
+                </p>
 
-                    <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                      Father Name
-                    </th>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
+                  {student.className || "N/A"}
+                </span>
+              </div>
 
-                    <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                      Mobile
-                    </th>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-500 mb-1">
+                  Stream
+                </p>
 
-                    <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                      Class
-                    </th>
+                <p className="text-sm text-gray-800 break-words">
+                  {student.stream || "—"}
+                </p>
+              </div>
 
-                    <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                      Stream
-                    </th>
+              <div className="min-w-0 col-span-2">
+                <p className="text-xs font-semibold text-gray-500 mb-1">
+                  Branch
+                </p>
 
-                    <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                      Branch
-                    </th>
-
-                    <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                      Actions
-                    </th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody className="divide-y">
-
-                  {filteredStudents.map(
-                    (student) => (
-                      <tr
-                        key={
-                          student.firestoreId ||
-                          student.id
-                        }
-                        className="hover:bg-gray-50"
-                      >
-
-                        {/* Student ID */}
-
-                        <td className="px-5 py-4">
-
-                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 font-bold text-sm">
-                            {student.studentId ||
-                              student.id ||
-                              "N/A"}
-                          </span>
-
-                        </td>
-
-                        {/* Student */}
-
-                        <td className="px-5 py-4">
-
-                          <div>
-
-                            <p className="font-semibold text-gray-900">
-                              {student.name ||
-                                "N/A"}
-                            </p>
-
-                            <p className="text-sm text-gray-500">
-                              {student.email ||
-                                "N/A"}
-                            </p>
-
-                          </div>
-
-                        </td>
-
-                        {/* Father */}
-
-                        <td className="px-5 py-4 text-gray-700">
-                          {student.fatherName ||
-                            "N/A"}
-                        </td>
-
-                        {/* Mobile */}
-
-                        <td className="px-5 py-4 text-gray-700">
-                          {student.mobile ||
-                            "N/A"}
-                        </td>
-
-                        {/* Class */}
-
-                        <td className="px-5 py-4">
-
-                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
-                            {student.className ||
-                              "N/A"}
-                          </span>
-
-                        </td>
-
-                        {/* Stream */}
-
-                        <td className="px-5 py-4 text-gray-700">
-                          {student.stream ||
-                            "—"}
-                        </td>
-
-                        {/* Branch */}
-
-                        <td className="px-5 py-4">
-
-                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-50 text-green-700 text-sm font-medium">
-                            {student.branch ||
-                              "N/A"}
-                          </span>
-
-                        </td>
-
-                        {/* Actions */}
-
-                        <td className="px-5 py-4">
-
-                          <div className="flex items-center gap-2">
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                editStudent(
-                                  student
-                                )
-                              }
-                              className="px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium text-sm transition"
-                            >
-                              Edit
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                deleteStudent(
-                                  student.firestoreId,
-                                  student.studentId ||
-                                    student.id
-                                )
-                              }
-                              className="px-3 py-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 font-medium text-sm transition"
-                            >
-                              Delete
-                            </button>
-
-                          </div>
-
-                        </td>
-
-                      </tr>
-                    )
-                  )}
-
-                </tbody>
-
-              </table>
-
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+                  {student.branch || "N/A"}
+                </span>
+              </div>
             </div>
-          )}
 
-        </div>
+            {/* Actions */}
+            <div className="flex gap-2 pt-4 mt-4 border-t">
+              <button
+                type="button"
+                onClick={() =>
+                  editStudent(student)
+                }
+                className="flex-1 px-3 py-2.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold text-sm transition"
+              >
+                Edit
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  deleteStudent(
+                    student.firestoreId,
+                    student.studentId ||
+                      student.id
+                  )
+                }
+                className="flex-1 px-3 py-2.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 font-semibold text-sm transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  )}
+</div>
 
       </div>
     </div>

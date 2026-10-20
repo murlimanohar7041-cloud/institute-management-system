@@ -105,3 +105,112 @@ a {
     overflow-x: hidden;
   }
 }
+
+/* Student Portal Header - Responsive Fix */
+
+.student-portal-header {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+.student-portal-logo {
+  min-width: 0 !important;
+  flex-shrink: 1 !important;
+}
+
+.student-portal-logo > div:last-child {
+  min-width: 0;
+}
+
+.student-portal-logo h2 {
+  overflow-wrap: anywhere;
+}
+
+.student-portal-header-right {
+  min-width: 0 !important;
+}
+
+.student-portal-student {
+  min-width: 0 !important;
+}
+
+.student-portal-student > div:last-child {
+  min-width: 0;
+}
+
+.student-portal-student strong,
+.student-portal-student small {
+  display: block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Mobile screens */
+@media (max-width: 600px) {
+  .student-portal-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1000 !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
+    padding: 10px 12px !important;
+  }
+
+  .student-portal-logo {
+    width: 100% !important;
+    gap: 9px !important;
+  }
+
+  .student-portal-logo > div:first-child {
+    width: 38px !important;
+    height: 38px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .student-portal-logo h2 {
+    font-size: 16px !important;
+    line-height: 1.3 !important;
+  }
+
+  .student-portal-logo p {
+    font-size: 11px !important;
+  }
+
+  .student-portal-header-right {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+  }
+
+  .student-portal-student {
+    flex: 1 1 auto !important;
+    gap: 7px !important;
+  }
+
+  .student-portal-student strong {
+    max-width: 145px;
+    font-size: 12px;
+  }
+
+  .student-portal-student small {
+    max-width: 145px;
+    font-size: 10px;
+  }
+
+  .student-portal-header-right > button:last-child {
+    flex-shrink: 0 !important;
+    padding: 9px 12px !important;
+    font-size: 12px !important;
+  }
+
+  .student-portal-header-right > button:first-child {
+    flex-shrink: 0 !important;
+    width: 38px !important;
+    height: 38px !important;
+  }
+}

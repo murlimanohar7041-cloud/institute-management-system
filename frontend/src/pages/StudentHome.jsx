@@ -1074,13 +1074,64 @@ const submitPayment = async () => {
 
   return (
 
-    <div style={styles.page}>
+    <div className="student-dashboard-page" style={styles.page}>
+      <style>{`
+        .student-dashboard-page, .student-dashboard-page * { box-sizing: border-box; }
+        .student-dashboard-page { width: 100%; max-width: 100%; overflow-x: clip; }
+        .student-dashboard-page button, .student-dashboard-page input, .student-dashboard-page select { font: inherit; }
+        .student-dashboard-page button { transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease; }
+        .student-dashboard-page button:hover { filter: brightness(.98); }
+        .student-dashboard-page .student-portal-header { gap: 16px; flex-wrap: wrap; }
+        .student-dashboard-page .student-portal-header-right { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+        .student-dashboard-page main { min-width: 0; }
+        .student-dashboard-page main > section { min-width: 0; max-width: 100%; }
+        .student-dashboard-page main > section[style*="grid"] { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)) !important; }
+        .student-dashboard-page main > section > div[style*="grid"] { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)) !important; }
+        .student-dashboard-page input, .student-dashboard-page select { max-width: 100%; min-width: 0; }
+        .student-dashboard-page a { overflow-wrap: anywhere; }
+        .student-dashboard-page .student-modal-overlay { padding: 18px !important; }
+        @media (max-width: 900px) {
+          .student-dashboard-page .student-portal-header { padding: 12px 18px !important; align-items: flex-start !important; }
+          .student-dashboard-page .student-portal-logo { min-width: 0; gap: 9px !important; }
+          .student-dashboard-page .student-portal-header-right { gap: 9px !important; }
+          .student-dashboard-page main { padding: 24px 16px 36px !important; }
+          .student-dashboard-page main > section { margin-bottom: 18px; }
+          .student-dashboard-page h1 { font-size: clamp(23px, 4vw, 30px) !important; overflow-wrap: anywhere; }
+          .student-dashboard-page .student-portal-student { min-width: 0; }
+        }
+        @media (max-width: 600px) {
+          .student-dashboard-page .student-portal-header { position: relative !important; padding: 12px !important; gap: 12px !important; }
+          .student-dashboard-page .student-portal-logo { width: 100%; }
+          .student-dashboard-page .student-portal-logo h2 { font-size: 16px !important; }
+          .student-dashboard-page .student-portal-header-right { width: 100%; justify-content: space-between !important; gap: 8px !important; }
+          .student-dashboard-page .student-portal-student { flex: 1; min-width: 0; }
+          .student-dashboard-page .student-portal-student strong, .student-dashboard-page .student-portal-student small { display: block; overflow-wrap: anywhere; }
+          .student-dashboard-page main { padding: 16px 12px 28px !important; }
+          .student-dashboard-page main > section { border-radius: 14px !important; }
+          .student-dashboard-page main > section[style*="linear-gradient"] { flex-direction: column !important; align-items: flex-start !important; padding: 22px 18px !important; }
+          .student-dashboard-page main > section[style*="grid"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+          .student-dashboard-page main > section > div[style*="grid"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+          .student-dashboard-page main > section[style*="grid"] > div { min-width: 0; }
+          .student-dashboard-page main > section > div[style*="grid"] > div { min-width: 0; }
+          .student-dashboard-page .student-portal-header button { padding: 9px 11px !important; }
+          .student-dashboard-page .student-modal-overlay { padding: 10px !important; align-items: flex-start !important; overflow-y: auto !important; }
+          .student-dashboard-page .student-modal-panel { width: 100% !important; max-width: 100% !important; max-height: calc(100dvh - 20px) !important; overflow-y: auto !important; margin: auto 0 !important; padding: 20px 14px !important; }
+          .student-dashboard-page [style*="resultDetails"] { grid-template-columns: 1fr !important; }
+          .student-dashboard-page [style*="locationDetails"] { display: flex !important; flex-direction: column !important; align-items: flex-start !important; }
+          .student-dashboard-page [style*="notificationItem"] { align-items: flex-start !important; }
+        }
+        @media (max-width: 380px) {
+          .student-dashboard-page main > section[style*="grid"], .student-dashboard-page main > section > div[style*="grid"] { grid-template-columns: minmax(0, 1fr) !important; }
+          .student-dashboard-page .student-portal-student { display: none !important; }
+          .student-dashboard-page .student-portal-header-right { justify-content: flex-start !important; }
+        }
+      `}</style>
 
       {/* HEADER */}
 
-      <header style={styles.header}>
+      <header className="student-portal-header" style={styles.header}>
 
-        <div style={styles.logoSection}>
+        <div className="student-portal-logo" style={styles.logoSection}>
 
           <div style={styles.logo}>
             JSC
@@ -1101,7 +1152,7 @@ const submitPayment = async () => {
         </div>
 
 
-        <div style={styles.headerRight}>
+        <div className="student-portal-header-right" style={styles.headerRight}>
 
           <button
             type="button"
@@ -1117,7 +1168,7 @@ const submitPayment = async () => {
             )}
           </button>
 
-          <div style={styles.studentMini}>
+          <div className="student-portal-student" style={styles.studentMini}>
 
             <div style={styles.miniAvatar}>
 
@@ -1506,8 +1557,8 @@ const submitPayment = async () => {
           EDIT PROFILE MODAL
       ========================= */}
       {showProfileEdit && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.profileEditModal}>
+        <div className="student-modal-overlay" style={styles.modalOverlay}>
+          <div className="student-modal-panel student-profile-panel" style={styles.profileEditModal}>
             <button type="button" style={styles.closeModal} onClick={() => setShowProfileEdit(false)}>×</button>
             <h2 style={styles.paymentTitle}>✏️ Edit Profile</h2>
             <p style={styles.paymentSubtitle}>Apni basic student information update karein.</p>
@@ -1546,8 +1597,8 @@ const submitPayment = async () => {
       ========================= */}
 
       {showStudyMaterials && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.resultsModal}>
+        <div className="student-modal-overlay" style={styles.modalOverlay}>
+          <div className="student-modal-panel" style={styles.resultsModal}>
             <button style={styles.closeModal} onClick={() => setShowStudyMaterials(false)}>×</button>
             <h2 style={styles.paymentTitle}>📖 Study Materials</h2>
             <p style={styles.paymentSubtitle}>Notes and study materials for Class {student?.className || "N/A"}{student?.stream ? ` — ${student.stream}` : ""}</p>
@@ -1600,8 +1651,8 @@ const submitPayment = async () => {
       ========================= */}
 
       {showNotices && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.resultsModal}>
+        <div className="student-modal-overlay" style={styles.modalOverlay}>
+          <div className="student-modal-panel" style={styles.resultsModal}>
             <button style={styles.closeModal} onClick={() => setShowNotices(false)}>×</button>
             <h2 style={styles.paymentTitle}>📢 Notices</h2>
             <p style={styles.paymentSubtitle}>Latest notices for all students</p>
@@ -1639,8 +1690,8 @@ const submitPayment = async () => {
       ========================= */}
 
       {showCertificates && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.resultsModal}>
+        <div className="student-modal-overlay" style={styles.modalOverlay}>
+          <div className="student-modal-panel" style={styles.resultsModal}>
             <button style={styles.closeModal} onClick={() => setShowCertificates(false)}>×</button>
             <h2 style={styles.paymentTitle}>📜 My Certificates</h2>
             <p style={styles.paymentSubtitle}>Your certificates and credentials</p>
@@ -1692,8 +1743,8 @@ const submitPayment = async () => {
       ========================= */}
 
       {showResults && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.resultsModal}>
+        <div className="student-modal-overlay" style={styles.modalOverlay}>
+          <div className="student-modal-panel" style={styles.resultsModal}>
             <button
               style={styles.closeModal}
               onClick={() => setShowResults(false)}
@@ -1822,8 +1873,8 @@ const submitPayment = async () => {
       ========================= */}
 
       {showFees && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.paymentModal}>
+        <div className="student-modal-overlay" style={styles.modalOverlay}>
+          <div className="student-modal-panel student-payment-panel" style={styles.paymentModal}>
             <button
               style={styles.closeModal}
               onClick={() => setShowFees(false)}
@@ -1922,7 +1973,7 @@ const submitPayment = async () => {
 
 
       {showNotifications && (
-        <div style={styles.modalOverlay}>
+        <div className="student-modal-overlay" style={styles.modalOverlay}>
           <div style={styles.notificationModal}>
             <div style={styles.notificationHeader}>
               <div>
@@ -2140,12 +2191,16 @@ function ServiceCard({
 const styles = {
 
   page: {
-    minHeight: "100vh",
-    background: "#f5f7fb",
-    color: "#1f2937",
-    fontFamily:
-      "Inter, Arial, Helvetica, sans-serif",
-  },
+  minHeight: "100vh",
+  width: "100%",
+  maxWidth: "100vw",
+  overflowX: "hidden",
+  background: "#f5f7fb",
+  color: "#1f2937",
+  fontFamily:
+    "Inter, Arial, Helvetica, sans-serif",
+  boxSizing: "border-box",
+},
 
 
   header: {
@@ -2275,10 +2330,13 @@ const styles = {
 
 
   main: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-    padding: "32px 20px 50px",
-  },
+  width: "100%",
+  maxWidth: "1200px",
+  margin: "0 auto",
+  padding: "32px 20px 50px",
+  boxSizing: "border-box",
+  minWidth: 0,
+},
 
 
   welcomeCard: {
@@ -2733,28 +2791,35 @@ const styles = {
 
 
   modalOverlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.55)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "20px",
-    zIndex: 9999,
-    overflowY: "auto",
-  },
+  position: "fixed",
+  inset: 0,
+  width: "100%",
+  maxWidth: "100vw",
+  boxSizing: "border-box",
+  background: "rgba(0,0,0,0.55)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "20px",
+  zIndex: 9999,
+  overflowX: "hidden",
+  overflowY: "auto",
+},
 
   resultsModal: {
-    position: "relative",
-    width: "100%",
-    maxWidth: "620px",
-    maxHeight: "90vh",
-    overflowY: "auto",
-    background: "#ffffff",
-    borderRadius: "20px",
-    padding: "28px",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-  },
+  position: "relative",
+  width: "100%",
+  maxWidth: "620px",
+  minWidth: 0,
+  maxHeight: "90vh",
+  overflowY: "auto",
+  overflowX: "hidden",
+  background: "#ffffff",
+  borderRadius: "20px",
+  padding: "28px",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+  boxSizing: "border-box",
+},
 
   resultStudentBox: {
     background: "#eff6ff",
@@ -2782,23 +2847,26 @@ const styles = {
   },
 
   resultTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "15px",
-  },
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "15px",
+  minWidth: 0,
+},
 
   resultExam: {
-    margin: 0,
-    fontSize: "17px",
-    fontWeight: "800",
-  },
+  margin: 0,
+  fontSize: "17px",
+  fontWeight: "800",
+  overflowWrap: "anywhere",
+},
 
-  resultId: {
-    margin: "5px 0 0",
-    fontSize: "11px",
-    color: "#6b7280",
-  },
+ resultId: {
+  margin: "5px 0 0",
+  fontSize: "11px",
+  color: "#6b7280",
+  overflowWrap: "anywhere",
+},
 
   percentageBadge: {
     minWidth: "75px",
@@ -2866,19 +2934,23 @@ const styles = {
     color: "#6b7280",
   },
   analyticsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: "10px",
-  },
+  width: "100%",
+  minWidth: 0,
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "10px",
+},
   analyticsCard: {
-    background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    borderRadius: "11px",
-    padding: "12px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "4px",
-  },
+  minWidth: 0,
+  overflow: "hidden",
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: "11px",
+  padding: "12px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+},
   analyticsIcon: {
     fontSize: "17px",
   },

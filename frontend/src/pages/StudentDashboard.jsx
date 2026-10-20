@@ -1,10 +1,11 @@
+
 import { useEffect, useMemo, useState } from "react"
+
 import { onAuthStateChanged } from "firebase/auth"
+
 import {
   collection,
   getDocs,
-  query,
-  where,
 } from "firebase/firestore"
 
 import { auth, db } from "../firebase"
@@ -14,7 +15,6 @@ function StudentDashboard({ branch }) {
   const [fees, setFees] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-
   const [search, setSearch] = useState("")
   const [classFilter, setClassFilter] = useState("All")
   const [selectedStudent, setSelectedStudent] = useState(null)
@@ -41,10 +41,12 @@ function StudentDashboard({ branch }) {
           collection(db, "students")
         )
 
-        const firestoreStudents = studentsSnapshot.docs.map((item) => ({
-          firestoreId: item.id,
-          ...item.data(),
-        }))
+        const firestoreStudents = studentsSnapshot.docs.map(
+          (item) => ({
+            firestoreId: item.id,
+            ...item.data(),
+          })
+        )
 
         setStudents(firestoreStudents)
 
@@ -56,10 +58,12 @@ function StudentDashboard({ branch }) {
           collection(db, "fees")
         )
 
-        const firestoreFees = feesSnapshot.docs.map((item) => ({
-          firestoreId: item.id,
-          ...item.data(),
-        }))
+        const firestoreFees = feesSnapshot.docs.map(
+          (item) => ({
+            firestoreId: item.id,
+            ...item.data(),
+          })
+        )
 
         setFees(firestoreFees)
 
@@ -79,7 +83,11 @@ function StudentDashboard({ branch }) {
           }
         }
       } catch (err) {
-        console.error("StudentDashboard Firebase Error:", err)
+        console.error(
+          "StudentDashboard Firebase Error:",
+          err
+        )
+
         setError(
           "Firebase data load nahi ho pa raha hai. Please check Firebase connection."
         )
@@ -300,8 +308,8 @@ function StudentDashboard({ branch }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
-        <div className="rounded-2xl border border-gray-200 bg-white px-8 py-10 text-center shadow-sm">
+      <div className="flex min-h-screen items-center justify-center overflow-x-hidden bg-gray-50 p-5 sm:p-8">
+        <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white px-6 py-10 text-center shadow-sm sm:px-8">
           <div className="text-4xl">⏳</div>
 
           <h2 className="mt-4 text-xl font-extrabold text-gray-900">
@@ -322,15 +330,15 @@ function StudentDashboard({ branch }) {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
-        <div className="max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+      <div className="flex min-h-screen items-center justify-center overflow-x-hidden bg-gray-50 p-5 sm:p-8">
+        <div className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-6 text-center shadow-sm sm:p-8">
           <div className="text-4xl">⚠️</div>
 
           <h2 className="mt-4 text-xl font-extrabold text-gray-900">
             Dashboard Error
           </h2>
 
-          <p className="mt-2 text-sm text-red-600">
+          <p className="mt-2 break-words text-sm text-red-600">
             {error}
           </p>
         </div>
@@ -361,77 +369,68 @@ function StudentDashboard({ branch }) {
       selectedStudent.firestoreId
 
     return (
-      <div className="min-h-screen bg-gray-50 p-5 sm:p-7 lg:p-8">
+      <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gray-50 p-4 sm:p-7 lg:p-8">
 
         {/* HEADER */}
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
-          <div>
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-blue-600">
               Student Dashboard
             </p>
 
-            <h1 className="mt-1 text-2xl font-extrabold text-gray-950 sm:text-3xl">
+            <h1 className="mt-1 break-words text-2xl font-extrabold text-gray-950 sm:text-3xl">
               {selectedStudent.name}
             </h1>
 
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 break-words text-sm text-gray-500">
               Complete student profile and fee information.
             </p>
           </div>
 
           <button
             onClick={() => setSelectedStudent(null)}
-            className="rounded-xl bg-gray-900 px-5 py-3 font-bold text-white transition hover:bg-gray-800"
+            className="w-full shrink-0 rounded-xl bg-gray-900 px-5 py-3 font-bold text-white transition hover:bg-gray-800 sm:w-auto"
           >
             ← Back to Students
           </button>
-
         </div>
 
         {/* PROFILE */}
 
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
-
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+        <div className="mt-6 min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
+          <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
 
             <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-4xl">
               👨‍🎓
             </div>
 
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-
-                <div>
-
-                  <h2 className="text-2xl font-extrabold text-gray-950">
+                <div className="min-w-0 flex-1">
+                  <h2 className="break-words text-2xl font-extrabold text-gray-950">
                     {selectedStudent.name}
                   </h2>
 
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 break-words text-sm text-gray-500">
                     Student ID:{" "}
-                    <span className="font-bold text-blue-700">
+                    <span className="break-all font-bold text-blue-700">
                       {studentId}
                     </span>
                   </p>
-
                 </div>
 
-                <span className="w-fit rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">
+                <span className="w-fit max-w-full shrink-0 break-words rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">
                   {selectedStudent.branch || branch || "—"}
                 </span>
-
               </div>
-
             </div>
-
           </div>
 
           {/* DETAILS */}
 
-          <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-7 grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
             <InfoBox
               label="Student ID"
@@ -477,24 +476,20 @@ function StudentDashboard({ branch }) {
               label="Status"
               value={selectedStudent.status || "approved"}
             />
-
           </div>
-
         </div>
 
         {/* FEE STRUCTURE */}
 
-        <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-5 shadow-sm sm:p-7">
-
+        <div className="mt-6 min-w-0 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50 p-5 shadow-sm sm:p-7">
           <p className="text-sm font-bold text-blue-600">
             Fee Structure
           </p>
 
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-3 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
-            <div>
-
-              <h2 className="text-xl font-extrabold text-gray-950">
+            <div className="min-w-0 flex-1">
+              <h2 className="break-words text-xl font-extrabold text-gray-950">
                 {selectedStudent.className}
 
                 {selectedStudent.stream
@@ -502,24 +497,21 @@ function StudentDashboard({ branch }) {
                   : ""}
               </h2>
 
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 break-words text-sm text-gray-500">
                 Applicable fee:{" "}
                 {selectedStructure.label}
               </p>
-
             </div>
 
-            <div className="text-3xl font-extrabold text-blue-700">
+            <div className="shrink-0 break-words text-3xl font-extrabold text-blue-700">
               ₹{selectedStructure.amount}
             </div>
-
           </div>
-
         </div>
 
         {/* FEE SUMMARY */}
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
           <SummaryCard
             title="Applicable Fee"
@@ -547,68 +539,61 @@ function StudentDashboard({ branch }) {
             note="Total records"
             type="records"
           />
-
         </div>
 
         {/* PAYMENT HISTORY */}
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="mt-6 min-w-0 max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
 
           <div className="border-b border-gray-200 p-5 sm:p-6">
-
             <h2 className="text-xl font-extrabold text-gray-950">
               Payment History
             </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 break-words text-sm text-gray-500">
               Fee records saved by Admin.
             </p>
-
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile-safe payment table */}
 
-            <table className="w-full min-w-[750px] text-left">
+          <div className="w-full max-w-full overflow-x-auto">
+            <table className="w-full min-w-[600px] table-auto text-left">
 
               <thead className="border-b border-gray-200 bg-gray-50">
-
                 <tr>
 
-                  <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
+                  <th className="whitespace-nowrap px-4 py-4 text-xs font-bold uppercase text-gray-500 sm:px-5">
                     Fee ID
                   </th>
 
-                  <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
+                  <th className="whitespace-nowrap px-4 py-4 text-xs font-bold uppercase text-gray-500 sm:px-5">
                     Date
                   </th>
 
-                  <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
+                  <th className="whitespace-nowrap px-4 py-4 text-xs font-bold uppercase text-gray-500 sm:px-5">
                     Month
                   </th>
 
-                  <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
+                  <th className="whitespace-nowrap px-4 py-4 text-xs font-bold uppercase text-gray-500 sm:px-5">
                     Amount
                   </th>
 
-                  <th className="px-5 py-4 text-xs font-bold uppercase text-gray-500">
+                  <th className="whitespace-nowrap px-4 py-4 text-xs font-bold uppercase text-gray-500 sm:px-5">
                     Status
                   </th>
 
                 </tr>
-
               </thead>
 
               <tbody className="divide-y divide-gray-100">
 
                 {selectedFees.length === 0 ? (
-
                   <tr>
-
                     <td
                       colSpan="5"
                       className="px-5 py-12 text-center"
                     >
-
                       <div className="text-4xl">
                         💰
                       </div>
@@ -617,47 +602,42 @@ function StudentDashboard({ branch }) {
                         No fee records
                       </p>
 
-                      <p className="mt-1 text-sm text-gray-500">
+                      <p className="mt-1 break-words text-sm text-gray-500">
                         Admin ke fees section se record add hone ke baad yahan dikhega.
                       </p>
-
                     </td>
-
                   </tr>
-
                 ) : (
-
                   selectedFees.map((fee) => (
-
                     <tr
                       key={fee.firestoreId}
                       className="transition hover:bg-gray-50"
                     >
 
-                      <td className="px-5 py-4">
-
-                        <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
+                      <td className="max-w-[150px] break-all px-4 py-4 sm:px-5">
+                        <span className="inline-block max-w-full break-all rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
                           {fee.feeId || fee.firestoreId}
                         </span>
-
                       </td>
 
-                      <td className="px-5 py-4 text-sm text-gray-600">
+                      <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-600 sm:px-5">
                         {fee.date || "—"}
                       </td>
 
-                      <td className="px-5 py-4 text-sm font-semibold text-gray-700">
+                      <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-gray-700 sm:px-5">
                         {fee.month || "—"}
                       </td>
 
-                      <td className="px-5 py-4 font-extrabold text-gray-900">
-                        ₹{Number(fee.amount || 0).toLocaleString("en-IN")}
+                      <td className="whitespace-nowrap px-4 py-4 font-extrabold text-gray-900 sm:px-5">
+                        ₹
+                        {Number(
+                          fee.amount || 0
+                        ).toLocaleString("en-IN")}
                       </td>
 
-                      <td className="px-5 py-4">
-
+                      <td className="px-4 py-4 sm:px-5">
                         <span
-                          className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+                          className={`inline-block whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-bold ${
                             fee.status === "Paid"
                               ? "bg-green-100 text-green-700"
                               : "bg-red-100 text-red-700"
@@ -665,23 +645,16 @@ function StudentDashboard({ branch }) {
                         >
                           {fee.status || "Pending"}
                         </span>
-
                       </td>
 
                     </tr>
-
                   ))
-
                 )}
 
               </tbody>
-
             </table>
-
           </div>
-
         </div>
-
       </div>
     )
   }
@@ -691,45 +664,42 @@ function StudentDashboard({ branch }) {
   // =========================
 
   return (
-    <div className="min-h-screen bg-gray-50 p-5 sm:p-7 lg:p-8">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-gray-50 p-4 sm:p-7 lg:p-8">
 
       {/* HEADER */}
 
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-center md:justify-between">
 
-        <div>
-
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-blue-600">
             Student Management
           </p>
 
-          <h1 className="mt-1 text-2xl font-extrabold text-gray-950 sm:text-3xl">
+          <h1 className="mt-1 break-words text-2xl font-extrabold text-gray-950 sm:text-3xl">
             Student Dashboard
           </h1>
 
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 break-words text-sm text-gray-500">
             View complete student information and fee details.
           </p>
-
         </div>
 
-        <div className="rounded-xl bg-blue-50 px-4 py-3">
+        <div className="w-fit max-w-full shrink-0 rounded-xl bg-blue-50 px-4 py-3">
 
           <p className="text-xs font-semibold text-gray-500">
             Active Branch
           </p>
 
-          <p className="font-extrabold text-blue-700">
+          <p className="break-words font-extrabold text-blue-700">
             {branch || "All Branches"}
           </p>
 
         </div>
-
       </div>
 
       {/* CLASS SUMMARY */}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-6 grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-5">
 
         <ClassCard
           title="All Students"
@@ -740,15 +710,15 @@ function StudentDashboard({ branch }) {
 
         {["9th", "10th", "11th", "12th"].map(
           (className) => (
-
             <ClassCard
               key={className}
               title={`Class ${className}`}
               count={getClassCount(className)}
               active={classFilter === className}
-              onClick={() => setClassFilter(className)}
+              onClick={() =>
+                setClassFilter(className)
+              }
             />
-
           )
         )}
 
@@ -756,11 +726,11 @@ function StudentDashboard({ branch }) {
 
       {/* SEARCH */}
 
-      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mt-6 min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
 
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-center md:justify-between">
 
-          <div className="relative w-full md:max-w-md">
+          <div className="relative w-full min-w-0 md:max-w-md">
 
             <input
               type="search"
@@ -771,19 +741,17 @@ function StudentDashboard({ branch }) {
               placeholder={`Search ${
                 branch || ""
               } student...`}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 pl-11 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              className="w-full min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 pl-11 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
             />
 
             <span className="absolute left-4 top-1/2 -translate-y-1/2">
               🔍
             </span>
-
           </div>
 
-          <div className="rounded-xl bg-blue-50 px-4 py-2.5">
+          <div className="w-fit max-w-full rounded-xl bg-blue-50 px-4 py-2.5">
 
-            <span className="text-sm font-bold text-blue-700">
-
+            <span className="break-words text-sm font-bold text-blue-700">
               {branch || "All Branches"} •{" "}
 
               {classFilter === "All"
@@ -791,22 +759,19 @@ function StudentDashboard({ branch }) {
                 : `Class ${classFilter}`}
 
               : {filteredStudents.length}
-
             </span>
 
           </div>
-
         </div>
-
       </div>
 
       {/* STUDENT CARDS */}
 
-      <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6 grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-3">
 
         {filteredStudents.length === 0 ? (
 
-          <div className="md:col-span-2 xl:col-span-3 rounded-2xl border border-gray-200 bg-white p-14 text-center shadow-sm">
+          <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm md:col-span-2 xl:col-span-3 sm:p-14">
 
             <div className="text-5xl">
               👨‍🎓
@@ -816,7 +781,7 @@ function StudentDashboard({ branch }) {
               No students found
             </p>
 
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 break-words text-sm text-gray-500">
               Register students from the Students section first.
             </p>
 
@@ -841,37 +806,38 @@ function StudentDashboard({ branch }) {
               getFeeStructure(student)
 
             return (
-
               <div
-                key={student.firestoreId || student.id}
-                className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                key={
+                  student.firestoreId ||
+                  student.id
+                }
+                className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
               >
 
                 {/* CARD HEADER */}
 
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start justify-between gap-3">
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
 
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-xl">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-xl">
                       👨‍🎓
                     </div>
 
-                    <div>
+                    <div className="min-w-0 flex-1">
 
-                      <h3 className="font-extrabold text-gray-950">
+                      <h3 className="break-words font-extrabold text-gray-950">
                         {student.name}
                       </h3>
 
-                      <p className="mt-1 text-xs font-bold text-blue-600">
+                      <p className="mt-1 break-all text-xs font-bold text-blue-600">
                         {studentId}
                       </p>
 
                     </div>
-
                   </div>
 
-                  <span className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
+                  <span className="max-w-[35%] shrink-0 break-words rounded-lg bg-gray-100 px-2.5 py-1 text-right text-xs font-bold text-gray-600">
                     {student.className}
                   </span>
 
@@ -879,39 +845,39 @@ function StudentDashboard({ branch }) {
 
                 {/* INFO */}
 
-                <div className="mt-5 space-y-2">
+                <div className="mt-5 min-w-0 space-y-2">
 
-                  <div className="flex justify-between gap-3 text-sm">
+                  <div className="flex min-w-0 items-start justify-between gap-3 text-sm">
 
-                    <span className="text-gray-500">
+                    <span className="shrink-0 text-gray-500">
                       Father's Name
                     </span>
 
-                    <span className="font-bold text-gray-800">
+                    <span className="min-w-0 max-w-[60%] break-words text-right font-bold text-gray-800">
                       {student.fatherName || "—"}
                     </span>
 
                   </div>
 
-                  <div className="flex justify-between gap-3 text-sm">
+                  <div className="flex min-w-0 items-start justify-between gap-3 text-sm">
 
-                    <span className="text-gray-500">
+                    <span className="shrink-0 text-gray-500">
                       Mobile
                     </span>
 
-                    <span className="font-bold text-gray-800">
+                    <span className="min-w-0 max-w-[60%] break-words text-right font-bold text-gray-800">
                       {student.mobile || "—"}
                     </span>
 
                   </div>
 
-                  <div className="flex justify-between gap-3 text-sm">
+                  <div className="flex min-w-0 items-start justify-between gap-3 text-sm">
 
-                    <span className="text-gray-500">
+                    <span className="shrink-0 text-gray-500">
                       Stream
                     </span>
 
-                    <span className="font-bold text-gray-800">
+                    <span className="min-w-0 max-w-[60%] break-words text-right font-bold text-gray-800">
                       {student.stream || "—"}
                     </span>
 
@@ -921,15 +887,15 @@ function StudentDashboard({ branch }) {
 
                 {/* FEE */}
 
-                <div className="mt-5 rounded-xl bg-gray-50 p-4">
+                <div className="mt-5 min-w-0 overflow-hidden rounded-xl bg-gray-50 p-4">
 
-                  <div className="flex justify-between gap-3">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
 
-                    <span className="text-xs font-bold text-gray-500">
+                    <span className="shrink-0 text-xs font-bold text-gray-500">
                       Applicable Fee
                     </span>
 
-                    <span className="text-sm font-extrabold text-gray-900">
+                    <span className="min-w-0 max-w-[60%] break-words text-right text-sm font-extrabold text-gray-900">
                       {structure.label}
                     </span>
 
@@ -937,32 +903,27 @@ function StudentDashboard({ branch }) {
 
                   <div className="mt-3 grid grid-cols-2 gap-3">
 
-                    <div>
-
+                    <div className="min-w-0">
                       <p className="text-xs text-gray-500">
                         Paid
                       </p>
 
-                      <p className="mt-1 font-extrabold text-green-600">
+                      <p className="mt-1 break-words font-extrabold text-green-600">
                         ₹{paid}
                       </p>
-
                     </div>
 
-                    <div>
-
+                    <div className="min-w-0">
                       <p className="text-xs text-gray-500">
                         Pending
                       </p>
 
-                      <p className="mt-1 font-extrabold text-red-600">
+                      <p className="mt-1 break-words font-extrabold text-red-600">
                         ₹{pending}
                       </p>
-
                     </div>
 
                   </div>
-
                 </div>
 
                 {/* BUTTON */}
@@ -977,23 +938,20 @@ function StudentDashboard({ branch }) {
                 </button>
 
               </div>
-
             )
           })
-
         )}
-
       </div>
 
       {/* INFO */}
 
-      <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-5">
+      <div className="mt-6 min-w-0 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50 p-5">
 
         <p className="text-sm font-bold text-blue-700">
           ℹ️ Student Dashboard
         </p>
 
-        <p className="mt-1 text-sm leading-6 text-gray-600">
+        <p className="mt-1 break-words text-sm leading-6 text-gray-600">
           Students aur fees ab Firebase Firestore se
           load ho rahe hain. Admin ke Fees section me
           add kiya gaya record yahan student ke email
@@ -1001,7 +959,6 @@ function StudentDashboard({ branch }) {
         </p>
 
       </div>
-
     </div>
   )
 }
@@ -1012,16 +969,14 @@ function StudentDashboard({ branch }) {
 
 function InfoBox({ label, value }) {
   return (
-    <div className="rounded-xl bg-gray-50 p-4">
-
+    <div className="min-w-0 overflow-hidden rounded-xl bg-gray-50 p-4">
       <p className="text-xs font-bold uppercase text-gray-400">
         {label}
       </p>
 
-      <p className="mt-1 break-words font-extrabold text-gray-900">
+      <p className="mt-1 break-words [overflow-wrap:anywhere] font-extrabold text-gray-900">
         {value || "—"}
       </p>
-
     </div>
   )
 }
@@ -1048,21 +1003,19 @@ function SummaryCard({
 
   return (
     <div
-      className={`rounded-2xl border p-5 shadow-sm ${classes[type]}`}
+      className={`min-w-0 overflow-hidden rounded-2xl border p-5 shadow-sm ${classes[type]}`}
     >
-
-      <p className="text-sm font-bold opacity-80">
+      <p className="break-words text-sm font-bold opacity-80">
         {title}
       </p>
 
-      <p className="mt-2 text-3xl font-extrabold">
+      <p className="mt-2 break-words text-3xl font-extrabold">
         {amount}
       </p>
 
-      <p className="mt-1 text-xs opacity-80">
+      <p className="mt-1 break-words text-xs opacity-80">
         {note}
       </p>
-
     </div>
   )
 }
@@ -1076,25 +1029,23 @@ function ClassCard({
   return (
     <button
       onClick={onClick}
-      className={`rounded-2xl border p-5 text-left shadow-sm transition ${
+      className={`min-w-0 overflow-hidden rounded-2xl border p-5 text-left shadow-sm transition ${
         active
           ? "border-blue-500 bg-blue-50"
           : "border-gray-200 bg-white"
       }`}
     >
-
-      <p className="text-sm font-bold text-gray-500">
+      <p className="break-words text-sm font-bold text-gray-500">
         {title}
       </p>
 
-      <p className="mt-2 text-3xl font-extrabold text-gray-950">
+      <p className="mt-2 break-words text-3xl font-extrabold text-gray-950">
         {count}
       </p>
 
       <p className="mt-1 text-xs text-gray-500">
         Students
       </p>
-
     </button>
   )
 }
