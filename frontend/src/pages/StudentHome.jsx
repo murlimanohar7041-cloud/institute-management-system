@@ -1931,6 +1931,40 @@ const submitPayment = async () => {
               </p>
             </div>
 
+            {/* Direct UPI payment: opens a supported UPI app on mobile */}
+            <button
+              type="button"
+              style={{
+                ...styles.paySubmitButton,
+                backgroundColor: "#16a34a",
+                marginTop: "12px",
+                marginBottom: "16px",
+                opacity: paymentAmount && Number(paymentAmount) > 0 ? 1 : 0.6,
+              }}
+              disabled={!paymentAmount || Number(paymentAmount) <= 0}
+              onClick={() => {
+                const amount = Number(paymentAmount);
+                if (!Number.isFinite(amount) || amount <= 0) {
+                  alert("Please valid payment amount enter karein.");
+                  return;
+                }
+
+                const upiLink =
+                  `upi://pay?pa=${encodeURIComponent(selectedUpi)}` +
+                  `&pn=${encodeURIComponent("J. Solution Classes")}` +
+                  `&am=${amount.toFixed(2)}&cu=INR`;
+
+                window.location.href = upiLink;
+              }}
+            >
+              Pay Now with UPI
+            </button>
+
+            <p style={{ ...styles.paymentNote, marginTop: "-6px" }}>
+              Pay Now mobile par available UPI app kholega. Payment complete hone ke baad
+              UTR / Transaction ID neeche enter karke submit karein.
+            </p>
+
             <label style={styles.paymentLabel}>
               UTR / Transaction ID
             </label>
