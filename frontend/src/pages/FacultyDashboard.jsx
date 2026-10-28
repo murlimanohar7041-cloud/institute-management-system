@@ -241,7 +241,22 @@ export default function FacultyDashboard() {
         )
       );
 
-      const paymentSnap = await getDocs(collection(db, "payments"));
+      const facultyBranches = Array.isArray(assignedBranches)
+  ? assignedBranches.filter(Boolean)
+  : [];
+
+let paymentSnap;
+
+if (facultyBranches.length > 0) {
+  paymentSnap = await getDocs(
+    query(
+      collection(db, "payments"),
+      where("branch", "in", facultyBranches)
+    )
+  );
+} else {
+  paymentSnap = await getDocs(collection(db, "payments"));
+}
       const allPayments = paymentSnap.docs.map((item) => ({
         ...item.data(),
         id: item.id,

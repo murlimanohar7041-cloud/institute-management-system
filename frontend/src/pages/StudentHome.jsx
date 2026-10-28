@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { onAuthStateChanged } from "firebase/auth"
+
+
 import {
   collection,
   getDocs,
@@ -17,6 +19,7 @@ import { QRCodeSVG } from "qrcode.react"
 import { getApp } from "firebase/app"
 import { getStorage, ref, getBlob } from "firebase/storage"
 import { sendAdminNotification } from "../utils/notificationService"
+import StudentFeeDashboard from "./StudentFeeDashboard";
 
 
 function StudentHome() {
@@ -25,6 +28,7 @@ function StudentHome() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [showFees, setShowFees] = useState(false)
+  const [showMyFees, setShowMyFees] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState("")
   const [utr, setUtr] = useState("")
   const [selectedUpi, setSelectedUpi] = useState("9122993866@ybl")
@@ -1387,9 +1391,9 @@ const submitPayment = async () => {
           <div style={styles.serviceGrid}>
 
             <ServiceCard
-              icon="💰"
-              title="Fees"
-              text="View and pay your fees"
+              icon="💳"
+              title="Pay Fees"
+              text="Payment karne ke liye"
               onClick={() => {
                 setShowFees(true)
                 setPaymentMessage("")
@@ -1430,6 +1434,17 @@ const submitPayment = async () => {
               text="GPS location automatically shared with Admin"
               onClick={openMyLocation}
             />
+
+
+            <ServiceCard
+              icon="📋"
+              title="My Fees"
+              text="View your fee dashboard"
+              onClick={() => {
+                window.location.href = "/student-fees"
+              }}
+              />
+
 
           </div>
 
@@ -1867,7 +1882,7 @@ const submitPayment = async () => {
           </div>
         </div>
       )}
-
+     
       {/* =========================
           FEES PAYMENT MODAL
       ========================= */}

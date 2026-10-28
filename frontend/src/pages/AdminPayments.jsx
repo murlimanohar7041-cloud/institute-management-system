@@ -1,859 +1,632 @@
-import React, { useEffect, useState } from "react";
+
+import React, { useEffect, useState, useCallback } from "react";
 import {
   collection,
   getDocs,
-  query,
-  where,
-  updateDoc,
   doc,
+  updateDoc,
+  serverTimestamp,
 } from "firebase/firestore";
-
+import { jsPDF } from "jspdf";
 import { db } from "../firebase";
-import { sendStudentNotification } from "../utils/notificationService";
 
-function AdminPayments({ branch }) {
+export default function AdminPayments({ branch }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState("");
-  const [filter, setFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [search, setSearch] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
 
-  // =========================
-  // LOAD PAYMENTS
-  // =========================
-  const loadPayments = async () => {
+  const loadPayments = useCallback(async () => {
     try {
       setLoading(true);
+      setError("");
 
-      const paymentsRef = collection(db, "payments");
+      const snapshot = await getDocs(collection(db, "payments"));
 
-      const q = query(
-        paymentsRef,
-        where("branch", "==", branch)
-      );
+      const data = snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() }))
+        .filter((payment) => {
+          if (!branch || branch === "All Branches") return true;
+          return payment.branch === branch;
+        })
+        .sort((a, b) => {
+          const dateA =
+            a.createdAt?.toDate?.()?.getTime?.() ||
+            new Date(a.date || 0).getTime() ||
+            0;
+          const dateB =
+            b.createdAt?.toDate?.()?.getTime?.() ||
+            new Date(b.date || 0).getTime() ||
+            0;
+          return dateB - dateA;
+        });
 
-      const snapshot = await getDocs(q);
-
-      const paymentList = snapshot.docs.map((item) => ({
-        firestoreId: item.id,
-        ...item.data(),
-      }));
-
-      paymentList.sort((a, b) => {
-        const dateA = a.createdAt?.seconds
-          ? a.createdAt.seconds
-          : new Date(a.date || 0).getTime() / 1000;
-
-        const dateB = b.createdAt?.seconds
-          ? b.createdAt.seconds
-          : new Date(b.date || 0).getTime() / 1000;
-
-        return dateB - dateA;
-      });
-
-      setPayments(paymentList);
-    } catch (error) {
-      console.error("Payment loading error:", error);
-      alert("Payments load nahi ho pa rahe hain.");
+      setPayments(data);
+    } catch (err) {
+      console.error(err);
+      setError("Payments load nahi hue. Firebase connection aur rules check karein.");
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (branch) {
-      loadPayments();
-    }
   }, [branch]);
 
-  // =========================
-  // APPROVE / REJECT PAYMENT
-  // =========================
-  const updatePaymentStatus = async (payment, newStatus) => {
+  useEffect(() => {
+    loadPayments();
+  }, [loadPayments]);
+
+  const approvePayment = async (payment) => {
+    if (payment.status === "Approved") {
+      setError("Yeh payment pehle se Approved hai.");
+      return;
+    }
+
+    if (payment.status === "Rejected") {
+      setError("Rejected payment ko approve nahi kiya ja sakta.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Kya aap ₹${Number(payment.amount || 0)} ke payment ko approve kar chuke hain? Pehle bank/UPI transaction verify karein.`
+    );
+
+    if (!confirmed) return;
+
     try {
-      setProcessingId(payment.firestoreId);
+      setProcessingId(payment.id);
+      setError("");
+      setSuccess("");
 
-      const verificationTime = new Date().toISOString();
-
-      await updateDoc(
-        doc(db, "payments", payment.firestoreId),
-        {
-          status: newStatus,
-          verifiedAt: verificationTime,
-        }
-      );
-
-      setPayments((prev) =>
-        prev.map((item) =>
-          item.firestoreId === payment.firestoreId
-            ? {
-                ...item,
-                status: newStatus,
-                verifiedAt: verificationTime,
-              }
-            : item
-        )
-      );
-
-      await sendStudentNotification({
-        studentEmail: payment.studentEmail,
-        studentId: payment.studentId || "",
-        studentFirestoreId: payment.studentFirestoreId || "",
-        studentName: payment.studentName || "",
-        branch: payment.branch || branch,
-        className: payment.className || "",
-        stream: payment.stream || "",
-        title: newStatus === "Approved" ? "Payment Approved" : "Payment Rejected",
-        message:
-          newStatus === "Approved"
-            ? `Aapka ₹${payment.amount || 0} payment approve ho gaya hai.`
-            : `Aapka ₹${payment.amount || 0} payment reject kar diya gaya hai.`,
-        type: "Payment",
+      await updateDoc(doc(db, "payments", payment.id), {
+        status: "Approved",
+        verifiedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
 
-      alert(
-        newStatus === "Approved"
-          ? "Payment successfully approved."
-          : "Payment rejected."
-      );
-    } catch (error) {
-      console.error("Payment update error:", error);
-      alert("Payment status update nahi ho paya.");
+      setSuccess("Payment Approved. Receipt ab show aur download ki ja sakti hai.");
+      await loadPayments();
+    } catch (err) {
+      console.error(err);
+      setError("Payment update nahi hua. Firebase rules check karein.");
     } finally {
       setProcessingId("");
     }
   };
 
-  // =========================
-  // SEARCH + FILTER
-  // =========================
-  const filteredPayments = payments.filter((payment) => {
-    const statusMatch =
-      filter === "All" || payment.status === filter;
+  const rejectPayment = async (payment) => {
+    if (payment.status === "Approved") {
+      setError("Approved payment ko Reject nahi kar sakte.");
+      return;
+    }
 
-    const searchText = search.toLowerCase().trim();
+    const reason = window.prompt("Payment reject karne ka reason likhein:");
+    if (reason === null) return;
 
-    const searchMatch =
-      !searchText ||
-      String(payment.studentName || "")
-        .toLowerCase()
-        .includes(searchText) ||
-      String(payment.studentEmail || "")
-        .toLowerCase()
-        .includes(searchText) ||
-      String(payment.utr || "")
-        .toLowerCase()
-        .includes(searchText) ||
-      String(payment.studentId || "")
-        .toLowerCase()
-        .includes(searchText) ||
-      String(payment.paymentId || "")
-        .toLowerCase()
-        .includes(searchText);
-
-    return statusMatch && searchMatch;
-  });
-
-  // =========================
-  // COUNTS
-  // =========================
-  const pendingCount = payments.filter(
-    (item) => item.status === "Pending Verification"
-  ).length;
-
-  const approvedCount = payments.filter(
-    (item) => item.status === "Approved"
-  ).length;
-
-  const rejectedCount = payments.filter(
-    (item) => item.status === "Rejected"
-  ).length;
-
-  const totalApprovedAmount = payments
-    .filter((item) => item.status === "Approved")
-    .reduce(
-      (total, item) => total + Number(item.amount || 0),
-      0
-    );
-
-  // =========================
-  // DATE FORMAT
-  // =========================
-  const formatDate = (payment) => {
     try {
-      if (payment.date) {
-        return new Date(payment.date).toLocaleString("en-IN");
-      }
+      setProcessingId(payment.id);
+      setError("");
+      setSuccess("");
 
-      if (payment.createdAt?.seconds) {
-        return new Date(
-          payment.createdAt.seconds * 1000
-        ).toLocaleString("en-IN");
-      }
+      await updateDoc(doc(db, "payments", payment.id), {
+        status: "Rejected",
+        rejectionReason: reason.trim() || "Payment verify nahi ho saka.",
+        verifiedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
-      return "-";
-    } catch {
-      return "-";
+      setSuccess("Payment Reject kar diya gaya.");
+      await loadPayments();
+    } catch (err) {
+      console.error(err);
+      setError("Payment reject nahi hua. Firebase rules check karein.");
+    } finally {
+      setProcessingId("");
     }
   };
 
-  // =========================
-  // UI
-  // =========================
+  const getPaymentDate = (payment) => {
+    if (payment.verifiedAt?.toDate) {
+      return payment.verifiedAt.toDate().toLocaleString("en-IN");
+    }
+
+    if (payment.createdAt?.toDate) {
+      return payment.createdAt.toDate().toLocaleString("en-IN");
+    }
+
+    return payment.date || "N/A";
+  };
+
+  const downloadReceipt = (payment) => {
+    if (payment.status !== "Approved") {
+      alert("Receipt sirf Approved payment ke liye available hai.");
+      return;
+    }
+
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 18;
+    const contentWidth = pageWidth - margin * 2;
+
+    const receiptNo = String(payment.id || "N/A").slice(0, 24).toUpperCase();
+    const amount = Number(payment.amount || 0);
+
+    pdf.setFillColor(29, 78, 216);
+    pdf.rect(0, 0, pageWidth, 48, "F");
+
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(22);
+    pdf.text("J. SOLUTION CLASSES", margin, 19);
+
+    pdf.setFontSize(11);
+    pdf.text("OFFICIAL FEE PAYMENT RECEIPT", margin, 29);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.text("Payment Confirmation", margin, 37);
+
+    pdf.setFillColor(220, 252, 231);
+    pdf.roundedRect(pageWidth - 53, 13, 35, 10, 3, 3, "F");
+    pdf.setTextColor(22, 101, 52);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.text("APPROVED", pageWidth - 35.5, 19.5, { align: "center" });
+
+    let y = 62;
+
+    const addSectionTitle = (title) => {
+      pdf.setFillColor(239, 246, 255);
+      pdf.roundedRect(margin, y, contentWidth, 10, 2, 2, "F");
+      pdf.setTextColor(29, 78, 216);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.text(title, margin + 4, y + 6.5);
+      y += 18;
+    };
+
+    const addRow = (label, value) => {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(label, margin + 2, y);
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.setTextColor(31, 41, 55);
+
+      const valueLines = pdf.splitTextToSize(
+        String(value || "N/A"),
+        contentWidth - 55
+      );
+
+      pdf.text(valueLines, margin + 53, y);
+
+      y += Math.max(10, valueLines.length * 5 + 3);
+
+      pdf.setDrawColor(226, 232, 240);
+      pdf.line(margin, y - 4, pageWidth - margin, y - 4);
+    };
+
+    addSectionTitle("RECEIPT DETAILS");
+    addRow("Receipt Number", receiptNo);
+    addRow("Payment Date", getPaymentDate(payment));
+
+    addSectionTitle("STUDENT DETAILS");
+    addRow("Student Name", payment.studentName);
+    addRow("Email Address", payment.studentEmail);
+    addRow("Class", payment.className);
+    addRow("Branch", payment.branch);
+
+    addSectionTitle("PAYMENT DETAILS");
+    addRow("Payment Method", payment.upiId ? "UPI" : payment.method || "N/A");
+    addRow("Transaction / UTR", payment.utr || "N/A");
+    addRow("Status", "APPROVED");
+
+    y += 4;
+
+    pdf.setFillColor(240, 253, 244);
+    pdf.setDrawColor(187, 247, 208);
+    pdf.roundedRect(margin, y, contentWidth, 28, 3, 3, "FD");
+
+    pdf.setTextColor(22, 101, 52);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.text("TOTAL AMOUNT PAID", margin + 6, y + 10);
+
+    pdf.setFontSize(20);
+    pdf.text(`INR ${amount.toLocaleString("en-IN")}`, margin + 6, y + 21);
+
+    y += 40;
+
+    if (y > 265) {
+      pdf.addPage();
+      y = 30;
+    }
+
+    pdf.setDrawColor(203, 213, 225);
+    pdf.line(margin, y, pageWidth - margin, y);
+
+    y += 9;
+    pdf.setTextColor(71, 85, 105);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.text("Thank you!", pageWidth / 2, y, { align: "center" });
+
+    y += 6;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.text(
+      "This receipt represents a payment marked as Approved in the institute system.",
+      pageWidth / 2,
+      y,
+      { align: "center", maxWidth: contentWidth }
+    );
+
+    pdf.save(`J-Solution-Receipt-${receiptNo}.pdf`);
+  };
+
+  const printReceipt = () => {
+    window.print();
+  };
+
+  const filteredPayments = payments.filter((payment) => {
+    const matchesStatus =
+      statusFilter === "All" || payment.status === statusFilter;
+
+    const text = search.toLowerCase().trim();
+
+    const matchesSearch =
+      !text ||
+      (payment.studentName || "").toLowerCase().includes(text) ||
+      (payment.studentEmail || "").toLowerCase().includes(text) ||
+      (payment.utr || "").toLowerCase().includes(text) ||
+      (payment.className || "").toLowerCase().includes(text);
+
+    return matchesStatus && matchesSearch;
+  });
+
+  const pendingPayments = payments.filter(
+    (payment) => payment.status === "Pending Verification"
+  );
+
+  const approvedPayments = payments.filter(
+    (payment) => payment.status === "Approved"
+  );
+
+  const pendingTotal = pendingPayments.reduce(
+    (total, payment) => total + Number(payment.amount || 0),
+    0
+  );
+
+  const approvedTotal = approvedPayments.reduce(
+    (total, payment) => total + Number(payment.amount || 0),
+    0
+  );
+
   return (
-    <div style={styles.container}>
+    <div className="p-4 md:p-6 space-y-6">
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          .receipt-print-area, .receipt-print-area * {
+            visibility: visible !important;
+          }
+          .receipt-print-area {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            box-shadow: none !important;
+          }
+          .no-print { display: none !important; }
+        }
+      `}</style>
 
-      {/* HEADER */}
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>
-            Payment Management
-          </h1>
-
-          <p style={styles.subtitle}>
-            {branch} Branch • Student payment verification
-          </p>
-        </div>
-
-        <button
-          onClick={loadPayments}
-          style={styles.refreshButton}
-        >
-          🔄 Refresh
-        </button>
+      <div className="no-print">
+        <h1 className="text-2xl md:text-3xl font-bold text-blue-800">
+          Payment Management
+        </h1>
+        <p className="text-gray-600 mt-1">
+          Student payments verify karein aur receipt show/download karein.
+        </p>
       </div>
 
-      {/* SUMMARY */}
-      <div style={styles.statsGrid}>
-
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}>💳</div>
-
-          <div>
-            <p style={styles.statLabel}>
-              Total Payments
-            </p>
-
-            <h2 style={styles.statNumber}>
-              {payments.length}
-            </h2>
-          </div>
-        </div>
-
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}>⏳</div>
-
-          <div>
-            <p style={styles.statLabel}>
-              Pending
-            </p>
-
-            <h2 style={styles.statNumber}>
-              {pendingCount}
-            </h2>
-          </div>
-        </div>
-
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}>✅</div>
-
-          <div>
-            <p style={styles.statLabel}>
-              Approved
-            </p>
-
-            <h2 style={styles.statNumber}>
-              {approvedCount}
-            </h2>
-          </div>
-        </div>
-
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}>❌</div>
-
-          <div>
-            <p style={styles.statLabel}>
-              Rejected
-            </p>
-
-            <h2 style={styles.statNumber}>
-              {rejectedCount}
-            </h2>
-          </div>
-        </div>
-
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}>💰</div>
-
-          <div>
-            <p style={styles.statLabel}>
-              Approved Amount
-            </p>
-
-            <h2 style={styles.statNumber}>
-              ₹{totalApprovedAmount}
-            </h2>
-          </div>
-        </div>
-
-      </div>
-
-      {/* SEARCH + FILTER */}
-      <div style={styles.toolbar}>
-
-        <input
-          type="text"
-          placeholder="Search student, Gmail, UTR, Student ID..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={styles.searchInput}
-        />
-
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          style={styles.select}
-        >
-          <option value="All">
-            All Payments
-          </option>
-
-          <option value="Pending Verification">
-            Pending Verification
-          </option>
-
-          <option value="Approved">
-            Approved
-          </option>
-
-          <option value="Rejected">
-            Rejected
-          </option>
-        </select>
-
-      </div>
-
-      {/* LOADING */}
-      {loading ? (
-        <div style={styles.messageBox}>
-          <div style={styles.loadingIcon}>
-            ⏳
-          </div>
-
-          <h3>
-            Loading payments...
-          </h3>
-
-          <p>
-            Please wait.
-          </p>
-        </div>
-
-      ) : filteredPayments.length === 0 ? (
-
-        /* EMPTY */
-        <div style={styles.messageBox}>
-          <div style={styles.emptyIcon}>
-            📭
-          </div>
-
-          <h3>
-            No payments found
-          </h3>
-
-          <p>
-            Is branch ke liye abhi koi payment record nahi mila.
-          </p>
-        </div>
-
-      ) : (
-
-        /* TABLE */
-        <div style={styles.tableWrapper}>
-
-          <table style={styles.table}>
-
-            <thead>
-              <tr>
-                <th style={styles.th}>
-                  Student
-                </th>
-
-                <th style={styles.th}>
-                  Class
-                </th>
-
-                <th style={styles.th}>
-                  Amount
-                </th>
-
-                <th style={styles.th}>
-                  UTR / Transaction ID
-                </th>
-
-                <th style={styles.th}>
-                  UPI ID
-                </th>
-
-                <th style={styles.th}>
-                  Date
-                </th>
-
-                <th style={styles.th}>
-                  Status
-                </th>
-
-                <th style={styles.th}>
-                  Action
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-
-              {filteredPayments.map((payment) => (
-
-                <tr key={payment.firestoreId}>
-
-                  {/* STUDENT */}
-                  <td style={styles.td}>
-
-                    <strong style={styles.studentName}>
-                      {payment.studentName ||
-                        "Unknown Student"}
-                    </strong>
-
-                    <br />
-
-                    <span style={styles.email}>
-                      {payment.studentEmail || "-"}
-                    </span>
-
-                    <br />
-
-                    <span style={styles.studentId}>
-                      ID: {payment.studentId || "-"}
-                    </span>
-
-                  </td>
-
-                  {/* CLASS */}
-                  <td style={styles.td}>
-
-                    {payment.className || "-"}
-
-                    {payment.stream && (
-                      <>
-                        <br />
-
-                        <span style={styles.smallText}>
-                          {payment.stream}
-                        </span>
-                      </>
-                    )}
-
-                  </td>
-
-                  {/* AMOUNT */}
-                  <td style={styles.td}>
-
-                    <strong style={styles.amount}>
-                      ₹{Number(payment.amount || 0)}
-                    </strong>
-
-                  </td>
-
-                  {/* UTR */}
-                  <td style={styles.td}>
-
-                    <span style={styles.utr}>
-                      {payment.utr ||
-                        "Not provided"}
-                    </span>
-
-                  </td>
-
-                  {/* UPI */}
-                  <td style={styles.td}>
-                    {payment.upiId || "-"}
-                  </td>
-
-                  {/* DATE */}
-                  <td style={styles.td}>
-                    {formatDate(payment)}
-                  </td>
-
-                  {/* STATUS */}
-                  <td style={styles.td}>
-
-                    <span
-                      style={{
-                        ...styles.status,
-
-                        ...(payment.status ===
-                        "Approved"
-                          ? styles.approved
-                          : payment.status ===
-                            "Rejected"
-                          ? styles.rejected
-                          : styles.pending),
-                      }}
-                    >
-                      {payment.status ||
-                        "Pending Verification"}
-                    </span>
-
-                  </td>
-
-                  {/* ACTION */}
-                  <td style={styles.td}>
-
-                    {payment.status ===
-                    "Pending Verification" ? (
-
-                      <div style={styles.actionButtons}>
-
-                        <button
-                          disabled={
-                            processingId ===
-                            payment.firestoreId
-                          }
-                          onClick={() =>
-                            updatePaymentStatus(
-                              payment,
-                              "Approved"
-                            )
-                          }
-                          style={{
-                            ...styles.approveButton,
-                            opacity:
-                              processingId ===
-                              payment.firestoreId
-                                ? 0.6
-                                : 1,
-                          }}
-                        >
-                          {processingId ===
-                          payment.firestoreId
-                            ? "Processing..."
-                            : "✓ Approve"}
-                        </button>
-
-                        <button
-                          disabled={
-                            processingId ===
-                            payment.firestoreId
-                          }
-                          onClick={() =>
-                            updatePaymentStatus(
-                              payment,
-                              "Rejected"
-                            )
-                          }
-                          style={{
-                            ...styles.rejectButton,
-                            opacity:
-                              processingId ===
-                              payment.firestoreId
-                                ? 0.6
-                                : 1,
-                          }}
-                        >
-                          ✕ Reject
-                        </button>
-
-                      </div>
-
-                    ) : (
-
-                      <span
-                        style={{
-                          ...styles.doneText,
-                          color:
-                            payment.status ===
-                            "Approved"
-                              ? "#15803d"
-                              : "#dc2626",
-                        }}
-                      >
-                        {payment.status ===
-                        "Approved"
-                          ? "✓ Verified"
-                          : "✕ Rejected"}
-                      </span>
-
-                    )}
-
-                  </td>
-
-                </tr>
-
-              ))}
-
-            </tbody>
-
-          </table>
-
+      {error && (
+        <div className="no-print rounded-lg bg-red-50 border border-red-200 text-red-700 p-3">
+          {error}
         </div>
       )}
 
+      {success && (
+        <div className="no-print rounded-lg bg-green-50 border border-green-200 text-green-700 p-3">
+          {success}
+        </div>
+      )}
+
+      <div className="no-print grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="rounded-xl border bg-white shadow-sm p-5">
+          <p className="text-sm text-gray-500">Total Payment Requests</p>
+          <h2 className="text-3xl font-bold text-blue-700 mt-2">
+            {payments.length}
+          </h2>
+        </div>
+
+        <div className="rounded-xl border bg-white shadow-sm p-5">
+          <p className="text-sm text-gray-500">Pending Verification</p>
+          <h2 className="text-3xl font-bold text-orange-600 mt-2">
+            {pendingPayments.length}
+          </h2>
+          <p className="text-sm text-gray-500">
+            ₹{pendingTotal.toLocaleString("en-IN")}
+          </p>
+        </div>
+
+        <div className="rounded-xl border bg-white shadow-sm p-5">
+          <p className="text-sm text-gray-500">Approved Payments</p>
+          <h2 className="text-3xl font-bold text-green-700 mt-2">
+            ₹{approvedTotal.toLocaleString("en-IN")}
+          </h2>
+          <p className="text-sm text-gray-500">
+            {approvedPayments.length} approved
+          </p>
+        </div>
+      </div>
+
+      <div className="no-print flex flex-col md:flex-row gap-3">
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Student name, email ya UTR search karein..."
+          className="flex-1 border rounded-lg px-4 py-3"
+        />
+
+        <select
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+          className="border rounded-lg px-4 py-3 bg-white"
+        >
+          <option value="All">All Payments</option>
+          <option value="Pending Verification">Pending Verification</option>
+          <option value="Approved">Approved</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+
+        <button
+          onClick={loadPayments}
+          className="bg-blue-700 hover:bg-blue-800 text-white rounded-lg px-5 py-3"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div className="no-print overflow-x-auto bg-white border rounded-xl shadow-sm">
+        {loading ? (
+          <p className="p-8 text-center">Payments load ho rahe hain...</p>
+        ) : filteredPayments.length === 0 ? (
+          <p className="p-8 text-center text-gray-500">Koi payment nahi mila.</p>
+        ) : (
+          <table className="min-w-[1000px] w-full text-sm">
+            <thead className="bg-blue-50 text-blue-900">
+              <tr>
+                <th className="text-left p-4">Student</th>
+                <th className="text-left p-4">Class / Branch</th>
+                <th className="text-left p-4">Amount</th>
+                <th className="text-left p-4">UTR</th>
+                <th className="text-left p-4">Date</th>
+                <th className="text-left p-4">Status</th>
+                <th className="text-left p-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {filteredPayments.map((payment) => (
+                <tr key={payment.id} className="hover:bg-gray-50">
+                  <td className="p-4">
+                    <strong>{payment.studentName || "Unknown Student"}</strong>
+                    <div className="text-xs text-gray-500">
+                      {payment.studentEmail || "No email"}
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    {payment.className || "N/A"}
+                    <div className="text-xs text-gray-500">
+                      {payment.branch || "N/A"}
+                    </div>
+                  </td>
+                  <td className="p-4 font-bold">
+                    ₹{Number(payment.amount || 0).toLocaleString("en-IN")}
+                  </td>
+                  <td className="p-4 break-all">{payment.utr || "N/A"}</td>
+                  <td className="p-4">{getPaymentDate(payment)}</td>
+                  <td className="p-4">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        payment.status === "Approved"
+                          ? "bg-green-100 text-green-700"
+                          : payment.status === "Rejected"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-orange-100 text-orange-700"
+                      }`}
+                    >
+                      {payment.status || "Pending Verification"}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex flex-wrap gap-2">
+                      {payment.status === "Pending Verification" && (
+                        <>
+                          <button
+                            onClick={() => approvePayment(payment)}
+                            disabled={processingId === payment.id}
+                            className="bg-green-600 text-white px-3 py-2 rounded-lg disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => rejectPayment(payment)}
+                            disabled={processingId === payment.id}
+                            className="bg-red-600 text-white px-3 py-2 rounded-lg disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+
+                      {payment.status === "Approved" && (
+                        <button
+                          onClick={() => setSelectedReceipt(payment)}
+                          className="bg-blue-700 hover:bg-blue-800 text-white px-3 py-2 rounded-lg"
+                        >
+                          View Receipt
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {selectedReceipt && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 overflow-y-auto p-3 sm:p-6">
+          <div className="max-w-3xl mx-auto my-4 sm:my-8">
+            <div className="no-print flex justify-end gap-3 mb-3">
+              <button
+                onClick={() => downloadReceipt(selectedReceipt)}
+                className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-3 rounded-lg font-semibold shadow"
+              >
+                Download PDF
+              </button>
+              <button
+                onClick={printReceipt}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold shadow"
+              >
+                Print Receipt
+              </button>
+              <button
+                onClick={() => setSelectedReceipt(null)}
+                className="bg-white text-gray-800 px-4 py-3 rounded-lg font-semibold shadow"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="receipt-print-area bg-white rounded-2xl shadow-2xl overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6 sm:p-8">
+                <div className="flex flex-col sm:flex-row justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl sm:text-3xl font-extrabold tracking-wide">
+                      J. SOLUTION CLASSES
+                    </h2>
+                    <p className="mt-2 text-blue-100">
+                      Official Fee Payment Receipt
+                    </p>
+                  </div>
+                  <div className="self-start bg-green-100 text-green-800 rounded-full px-4 py-2 text-sm font-bold">
+                    ✓ PAYMENT APPROVED
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 sm:p-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                  <div className="bg-blue-50 rounded-xl p-4">
+                    <p className="text-xs uppercase tracking-wider text-blue-600 font-bold">
+                      Receipt Number
+                    </p>
+                    <p className="font-bold text-gray-800 mt-2 break-all">
+                      {selectedReceipt.id}
+                    </p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <p className="text-xs uppercase tracking-wider text-gray-500 font-bold">
+                      Payment Date
+                    </p>
+                    <p className="font-semibold text-gray-800 mt-2">
+                      {getPaymentDate(selectedReceipt)}
+                    </p>
+                  </div>
+                </div>
+
+                <h3 className="font-bold text-lg text-gray-800 mb-3">
+                  Student Information
+                </h3>
+
+                <div className="border rounded-xl divide-y mb-7">
+                  {[
+                    ["Student Name", selectedReceipt.studentName],
+                    ["Email Address", selectedReceipt.studentEmail],
+                    ["Class", selectedReceipt.className],
+                    ["Branch", selectedReceipt.branch],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="grid grid-cols-2 gap-3 p-4"
+                    >
+                      <span className="text-gray-500">{label}</span>
+                      <span className="text-gray-900 font-semibold break-words">
+                        {value || "N/A"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <h3 className="font-bold text-lg text-gray-800 mb-3">
+                  Payment Information
+                </h3>
+
+                <div className="border rounded-xl divide-y mb-7">
+                  {[
+                    ["Payment Method", selectedReceipt.upiId ? "UPI" : selectedReceipt.method || "N/A"],
+                    ["UTR / Transaction ID", selectedReceipt.utr],
+                    ["Payment Status", selectedReceipt.status],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="grid grid-cols-2 gap-3 p-4"
+                    >
+                      <span className="text-gray-500">{label}</span>
+                      <span className="text-gray-900 font-semibold break-words">
+                        {value || "N/A"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                  <div>
+                    <p className="text-green-800 text-sm font-bold uppercase tracking-wide">
+                      Total Amount Paid
+                    </p>
+                    <p className="text-gray-500 text-sm mt-1">
+                      Verified payment amount
+                    </p>
+                  </div>
+                  <p className="text-3xl font-extrabold text-green-700">
+                    ₹{Number(selectedReceipt.amount || 0).toLocaleString("en-IN")}
+                  </p>
+                </div>
+
+                <div className="text-center border-t mt-8 pt-6 text-gray-500 text-sm">
+                  <p className="font-bold text-gray-700">
+                    Thank you for your payment!
+                  </p>
+                  <p className="mt-2">
+                    Please keep this receipt for your records.
+                  </p>
+                  <p className="mt-1 text-xs">
+                    This receipt represents a payment marked as Approved in the institute system.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-// =====================================================
-// STYLES
-// =====================================================
-
-const styles = {
-
-  container: {
-    padding: "25px",
-    background: "#f8fafc",
-    minHeight: "100%",
-  },
-
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "25px",
-    gap: "15px",
-    flexWrap: "wrap",
-  },
-
-  title: {
-    margin: 0,
-    fontSize: "28px",
-    color: "#0f172a",
-  },
-
-  subtitle: {
-    marginTop: "6px",
-    color: "#64748b",
-    marginBottom: 0,
-  },
-
-  refreshButton: {
-    border: "none",
-    background: "#2563eb",
-    color: "#fff",
-    padding: "11px 18px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "600",
-  },
-
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(190px, 1fr))",
-    gap: "16px",
-    marginBottom: "25px",
-  },
-
-  statCard: {
-    background: "#fff",
-    borderRadius: "12px",
-    padding: "18px",
-    display: "flex",
-    alignItems: "center",
-    gap: "14px",
-    boxShadow:
-      "0 2px 10px rgba(0,0,0,0.06)",
-  },
-
-  statIcon: {
-    fontSize: "28px",
-  },
-
-  statLabel: {
-    margin: 0,
-    color: "#64748b",
-    fontSize: "13px",
-  },
-
-  statNumber: {
-    margin: "4px 0 0",
-    color: "#0f172a",
-    fontSize: "24px",
-  },
-
-  toolbar: {
-    background: "#fff",
-    padding: "15px",
-    borderRadius: "12px",
-    marginBottom: "20px",
-    display: "flex",
-    gap: "12px",
-    flexWrap: "wrap",
-    boxShadow:
-      "0 2px 10px rgba(0,0,0,0.04)",
-  },
-
-  searchInput: {
-    flex: 1,
-    minWidth: "280px",
-    padding: "12px",
-    border: "1px solid #cbd5e1",
-    borderRadius: "8px",
-    outline: "none",
-    fontSize: "14px",
-  },
-
-  select: {
-    padding: "12px",
-    border: "1px solid #cbd5e1",
-    borderRadius: "8px",
-    background: "#fff",
-    fontSize: "14px",
-    cursor: "pointer",
-  },
-
-  tableWrapper: {
-    background: "#fff",
-    borderRadius: "12px",
-    overflowX: "auto",
-    boxShadow:
-      "0 2px 10px rgba(0,0,0,0.06)",
-  },
-
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    minWidth: "1150px",
-  },
-
-  th: {
-    textAlign: "left",
-    padding: "14px",
-    background: "#f1f5f9",
-    color: "#334155",
-    fontSize: "13px",
-    borderBottom:
-      "1px solid #e2e8f0",
-    whiteSpace: "nowrap",
-  },
-
-  td: {
-    padding: "14px",
-    borderBottom:
-      "1px solid #e2e8f0",
-    color: "#334155",
-    fontSize: "14px",
-    verticalAlign: "top",
-  },
-
-  studentName: {
-    color: "#0f172a",
-  },
-
-  email: {
-    fontSize: "12px",
-    color: "#64748b",
-  },
-
-  studentId: {
-    fontSize: "12px",
-    color: "#2563eb",
-  },
-
-  smallText: {
-    fontSize: "12px",
-    color: "#64748b",
-  },
-
-  amount: {
-    color: "#15803d",
-    fontSize: "16px",
-  },
-
-  utr: {
-    display: "inline-block",
-    fontWeight: "600",
-    color: "#0f172a",
-    background: "#f1f5f9",
-    padding: "5px 8px",
-    borderRadius: "5px",
-    maxWidth: "180px",
-    wordBreak: "break-word",
-  },
-
-  status: {
-    display: "inline-block",
-    padding: "6px 10px",
-    borderRadius: "20px",
-    fontSize: "12px",
-    fontWeight: "600",
-    whiteSpace: "nowrap",
-  },
-
-  pending: {
-    background: "#fef3c7",
-    color: "#92400e",
-  },
-
-  approved: {
-    background: "#dcfce7",
-    color: "#166534",
-  },
-
-  rejected: {
-    background: "#fee2e2",
-    color: "#991b1b",
-  },
-
-  actionButtons: {
-    display: "flex",
-    gap: "7px",
-    flexWrap: "wrap",
-  },
-
-  approveButton: {
-    border: "none",
-    background: "#16a34a",
-    color: "#fff",
-    padding: "8px 11px",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: "600",
-    whiteSpace: "nowrap",
-  },
-
-  rejectButton: {
-    border: "none",
-    background: "#dc2626",
-    color: "#fff",
-    padding: "8px 11px",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: "600",
-    whiteSpace: "nowrap",
-  },
-
-  doneText: {
-    fontWeight: "600",
-    fontSize: "13px",
-    whiteSpace: "nowrap",
-  },
-
-  messageBox: {
-    background: "#fff",
-    borderRadius: "12px",
-    padding: "50px 20px",
-    textAlign: "center",
-    color: "#64748b",
-    boxShadow:
-      "0 2px 10px rgba(0,0,0,0.04)",
-  },
-
-  loadingIcon: {
-    fontSize: "35px",
-  },
-
-  emptyIcon: {
-    fontSize: "40px",
-  },
-};
-
-export default AdminPayments;

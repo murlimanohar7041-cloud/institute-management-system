@@ -1,6 +1,7 @@
 import "./App.css"
 
 import AdminDashboard from "./pages/AdminDashboard"
+import StudentFeeDashboard from "./pages/StudentFeeDashboard";
 
 import Navbar from "./components/Navbar"
 import Hero from "./components/Hero"
@@ -50,6 +51,34 @@ function Home() {
 
 function App() {
   const path = window.location.pathname
+
+  if (path === "/student-fees") {
+return ( <div>
+<button
+onClick={() => {
+window.location.href = "/student";
+}}
+style={{
+margin: "20px",
+padding: "10px 18px",
+background: "#1d4ed8",
+color: "white",
+border: "none",
+borderRadius: "8px",
+cursor: "pointer",
+fontWeight: "600"
+}}
+>
+← Back to Dashboard </button>
+
+
+  <StudentFeeDashboard />
+</div>
+
+
+);
+}
+
 
 
   // =========================
