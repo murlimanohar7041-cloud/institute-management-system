@@ -158,6 +158,7 @@ function Navbar() {
         </nav>
 
         {/* Desktop Login / Logout */}
+        <div className="hidden lg:block"></div>
         <div className="hidden lg:block">
           {!user ? (
             <a
@@ -177,6 +178,14 @@ function Navbar() {
             </button>
           )}
         </div>
+
+        {/* Live Demo Button */}
+<a
+  href="/live-demo"
+  className="hidden lg:inline-flex items-center rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-blue-800"
+>
+  🚀 Live Demo
+</a>
 
         {/* Mobile Menu Button */}
         <button
@@ -249,6 +258,15 @@ function Navbar() {
                 </button>
               )}
             </div>
+
+            {/* Mobile Live Demo Button */}
+<a
+  href="/live-demo"
+  onClick={closeMenu}
+  className="mt-3 rounded-xl bg-blue-700 px-5 py-3 text-center font-bold text-white transition hover:bg-blue-800"
+>
+  🚀 Try Live Demo
+</a>
           </nav>
         </div>
       )}

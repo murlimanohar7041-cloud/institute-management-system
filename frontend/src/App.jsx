@@ -1,5 +1,10 @@
 import "./App.css"
 
+import LiveDemo from "./pages/LiveDemo";
+import AdminDemo from "./pages/AdminDemo";
+import FacultyDemo from "./pages/FacultyDemo";
+import StudentDemo from "./pages/StudentDemo";
+
 import AdminDashboard from "./pages/AdminDashboard"
 import StudentFeeDashboard from "./pages/StudentFeeDashboard";
 
@@ -51,6 +56,12 @@ function Home() {
 
 function App() {
   const path = window.location.pathname
+
+  if (path === "/live-demo") return <LiveDemo />;
+
+  if (path === "/demo/admin") return <AdminDemo />;
+  if (path === "/demo/faculty") return <FacultyDemo />;
+  if (path === "/demo/student") return <StudentDemo />;
 
   if (path === "/student-fees") {
 return ( <div>
