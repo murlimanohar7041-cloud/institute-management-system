@@ -942,16 +942,19 @@ const submitPayment = async () => {
           .sort((a, b) => b.createdAt - a.createdAt)
           .slice(0, 50)
 
-        setNotifications((prev) => {
-          const previousIds = new Set(prev.map((item) => item.id))
-          const hasNew = list.some((item) => !previousIds.has(item.id))
+       setNotifications((prev) => {
+  const previousIds = new Set(prev.map((item) => item.id))
 
-          if (hasNew && prev.length > 0) {
-            playNotificationSound()
-          }
+  const newNotifications = list.filter(
+    (item) => !previousIds.has(item.id)
+  )
 
-          return list
-        })
+  if (prev.length > 0 && newNotifications.length > 0) {
+    playNotificationSound()
+  }
+
+  return list
+})
       },
       (error) => {
         console.error("Realtime notification error:", error)
