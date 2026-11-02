@@ -857,147 +857,222 @@ const submitPayment = async () => {
 
   const playNotificationSound = () => {
     try {
-      if (!notificationSoundEnabled) return
+      if (!notificationSoundEnabled) return;
 
       const AudioContextClass =
-        window.AudioContext || window.webkitAudioContext
+        window.AudioContext || window.webkitAudioContext;
 
-      if (!AudioContextClass) return
+      if (!AudioContextClass) return;
 
       if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContextClass()
+        audioContextRef.current = new AudioContextClass();
       }
 
-      const ctx = audioContextRef.current
+      const ctx = audioContextRef.current;
 
       if (ctx.state === "suspended") {
-        ctx.resume().catch(() => {})
+        ctx.resume().catch(() => {});
       }
 
-      const oscillator = ctx.createOscillator()
-      const gain = ctx.createGain()
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
 
-      oscillator.type = "sine"
-      oscillator.frequency.setValueAtTime(880, ctx.currentTime)
-      oscillator.frequency.setValueAtTime(1175, ctx.currentTime + 0.12)
+      oscillator.type = "sine";
 
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35)
+      oscillator.frequency.setValueAtTime(
+        880,
+        ctx.currentTime
+      );
 
-      oscillator.connect(gain)
-      gain.connect(ctx.destination)
+      oscillator.frequency.setValueAtTime(
+        1175,
+        ctx.currentTime + 0.12
+      );
 
-      oscillator.start()
-      oscillator.stop(ctx.currentTime + 0.35)
+      gain.gain.setValueAtTime(
+        0.0001,
+        ctx.currentTime
+      );
+
+      gain.gain.exponentialRampToValueAtTime(
+        0.18,
+        ctx.currentTime + 0.02
+      );
+
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        ctx.currentTime + 0.35
+      );
+
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.35);
     } catch (err) {
-      console.log("Notification sound unavailable:", err)
+      console.log("Notification sound unavailable:", err);
     }
-  }
+  };
 
-    useEffect(() => {
-    if (!student?.email) return
 
-    const email = String(student.email).toLowerCase().trim()
+  // =========================
+  // REAL-TIME NOTIFICATION LISTENER
+  // =========================
+
+  useEffect(() => {
+    if (!student?.email) return;
+
+    const email = String(student.email)
+      .toLowerCase()
+      .trim();
 
     const notificationsQuery = query(
       collection(db, "notifications"),
       where("studentEmail", "==", email)
-    )
+    );
+
+    let isInitialSnapshot = true;
 
     const unsubscribe = onSnapshot(
       notificationsQuery,
+
       (snapshot) => {
+        // Nayi notification aane par sound bajao.
+        // Purani notifications load hone par sound nahi bajega.
+        const hasNewNotification =
+          !isInitialSnapshot &&
+          snapshot.docChanges().some(
+            (change) => change.type === "added"
+          );
+
+        if (hasNewNotification) {
+          playNotificationSound();
+        }
+
         const list = snapshot.docs
           .map((item) => {
-            const data = item.data()
+            const data = item.data();
 
-            const createdAt = data.createdAt?.toMillis
-              ? data.createdAt.toMillis()
-              : data.createdAt?.seconds
-                ? data.createdAt.seconds * 1000
-                : Date.now()
+            let createdAt = Date.now();
+
+            if (data.createdAt?.toMillis) {
+              createdAt = data.createdAt.toMillis();
+            } else if (data.createdAt?.seconds) {
+              createdAt = data.createdAt.seconds * 1000;
+            }
+
+            const type = String(
+              data.type || "General"
+            ).toLowerCase();
+
+            let icon = "🔔";
+
+            if (type.includes("result")) {
+              icon = "📊";
+            } else if (type.includes("notice")) {
+              icon = "📢";
+            } else if (
+              type.includes("study") ||
+              type.includes("material")
+            ) {
+              icon = "📖";
+            } else if (type.includes("certificate")) {
+              icon = "📜";
+            } else if (
+              type.includes("fee") ||
+              type.includes("payment")
+            ) {
+              icon = "💰";
+            } else if (type.includes("location")) {
+              icon = "📍";
+            } else if (type.includes("admission")) {
+              icon = "📝";
+            }
 
             return {
               id: item.id,
               type: data.type || "General",
-              icon:
-                data.type === "Result"
-                  ? "📊"
-                  : data.type === "Notice"
-                    ? "📢"
-                    : data.type === "Study Material"
-                      ? "📖"
-                      : data.type === "Certificate"
-                        ? "📜"
-                        : data.type === "Fees"
-                          ? "💰"
-                          : "🔔",
+              icon,
               title: data.title || "Notification",
               message: data.message || "",
               createdAt,
               read: Boolean(data.read),
-            }
+            };
           })
           .sort((a, b) => b.createdAt - a.createdAt)
-          .slice(0, 50)
+          .slice(0, 50);
 
-       setNotifications((prev) => {
-  const previousIds = new Set(prev.map((item) => item.id))
+        setNotifications(list);
 
-  const newNotifications = list.filter(
-    (item) => !previousIds.has(item.id)
-  )
-
-  if (prev.length > 0 && newNotifications.length > 0) {
-    playNotificationSound()
-  }
-
-  return list
-})
+        isInitialSnapshot = false;
       },
-      (error) => {
-        console.error("Realtime notification error:", error)
-      }
-    )
 
+      (error) => {
+        console.error(
+          "Realtime notification error:",
+          error
+        );
+      }
+    );
+
+
+    // Browser audio ko pehle user click ke baad unlock karo.
     const unlockSound = () => {
       try {
         const AudioContextClass =
-          window.AudioContext || window.webkitAudioContext
+          window.AudioContext ||
+          window.webkitAudioContext;
 
-        if (!AudioContextClass) return
+        if (!AudioContextClass) return;
 
         if (!audioContextRef.current) {
-          audioContextRef.current = new AudioContextClass()
+          audioContextRef.current =
+            new AudioContextClass();
         }
 
-        if (audioContextRef.current.state === "suspended") {
-          audioContextRef.current.resume().catch(() => {})
+        if (
+          audioContextRef.current.state === "suspended"
+        ) {
+          audioContextRef.current.resume().catch(() => {});
         }
-      } catch {}
-    }
+      } catch (err) {
+        console.log("Audio unlock error:", err);
+      }
+    };
 
-    window.addEventListener("click", unlockSound, { once: true })
+    window.addEventListener(
+      "click",
+      unlockSound,
+      { once: true }
+    );
 
     return () => {
-      unsubscribe()
-      window.removeEventListener("click", unlockSound)
-    }
-  }, [student?.email])
+      unsubscribe();
 
-  const unreadNotificationCount = notifications.filter(
-    (item) => !item.read
-  ).length
+      window.removeEventListener(
+        "click",
+        unlockSound
+      );
+    };
+  }, [student?.email, notificationSoundEnabled]);
+
+    // =========================
+  // OPEN NOTIFICATIONS
+  // =========================
 
   const openNotifications = async () => {
-    setShowNotifications(true)
+    setShowNotifications(true);
 
-    const unreadItems = notifications.filter((item) => !item.read)
+    const unreadItems = notifications.filter(
+      (item) => !item.read
+    );
 
     setNotifications((prev) =>
-      prev.map((item) => ({ ...item, read: true }))
-    )
+      prev.map((item) => ({
+        ...item,
+        read: true,
+      }))
+    );
 
     try {
       await Promise.all(
@@ -1007,34 +1082,55 @@ const submitPayment = async () => {
             readAt: serverTimestamp(),
           })
         )
-      )
+      );
     } catch (error) {
-      console.error("Notification read status error:", error)
+      console.error(
+        "Notification read status error:",
+        error
+      );
     }
-  }
+  };
+
+
+  // =========================
+  // CLEAR NOTIFICATIONS
+  // =========================
 
   const clearNotifications = async () => {
-    if (notifications.length === 0) return
+    if (notifications.length === 0) return;
 
     const confirmDelete = window.confirm(
       "Kya aap saare notifications delete karna chahte hain?"
-    )
+    );
 
-    if (!confirmDelete) return
+    if (!confirmDelete) return;
 
     try {
       await Promise.all(
         notifications.map((item) =>
           deleteDoc(doc(db, "notifications", item.id))
         )
-      )
+      );
 
-      setNotifications([])
+      setNotifications([]);
     } catch (error) {
-      console.error("Notification delete error:", error)
-      alert("Notifications delete nahi ho paye. Dobara try karein.")
+      console.error(
+        "Notification delete error:",
+        error
+      );
+
+      alert(
+        "Notifications delete nahi ho paye. Dobara try karein."
+      );
     }
-  }
+  };
+
+
+  const unreadNotificationCount = notifications.filter(
+    (item) => !item.read
+  ).length;
+
+
 
   // =========================
   // LOADING
