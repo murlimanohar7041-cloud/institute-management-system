@@ -10,6 +10,7 @@ import {
   where,
   addDoc,
   updateDoc,
+  deleteDoc,
   doc,
   serverTimestamp,
 } from "firebase/firestore"
@@ -894,10 +895,10 @@ const submitPayment = async () => {
     }
   }
 
-  useEffect(() => {
+    useEffect(() => {
     if (!student?.email) return
 
-    const email = String(student.email).toLowerCase()
+    const email = String(student.email).toLowerCase().trim()
 
     const notificationsQuery = query(
       collection(db, "notifications"),
@@ -910,6 +911,7 @@ const submitPayment = async () => {
         const list = snapshot.docs
           .map((item) => {
             const data = item.data()
+
             const createdAt = data.createdAt?.toMillis
               ? data.createdAt.toMillis()
               : data.createdAt?.seconds
@@ -934,7 +936,7 @@ const submitPayment = async () => {
               title: data.title || "Notification",
               message: data.message || "",
               createdAt,
-              read: false,
+              read: Boolean(data.read),
             }
           })
           .sort((a, b) => b.createdAt - a.createdAt)
@@ -948,14 +950,7 @@ const submitPayment = async () => {
             playNotificationSound()
           }
 
-          const oldReadIds = new Set(
-            prev.filter((item) => item.read).map((item) => item.id)
-          )
-
-          return list.map((item) => ({
-            ...item,
-            read: oldReadIds.has(item.id),
-          }))
+          return list
         })
       },
       (error) => {
@@ -967,10 +962,13 @@ const submitPayment = async () => {
       try {
         const AudioContextClass =
           window.AudioContext || window.webkitAudioContext
+
         if (!AudioContextClass) return
+
         if (!audioContextRef.current) {
           audioContextRef.current = new AudioContextClass()
         }
+
         if (audioContextRef.current.state === "suspended") {
           audioContextRef.current.resume().catch(() => {})
         }
@@ -989,15 +987,50 @@ const submitPayment = async () => {
     (item) => !item.read
   ).length
 
-  const openNotifications = () => {
+  const openNotifications = async () => {
     setShowNotifications(true)
+
+    const unreadItems = notifications.filter((item) => !item.read)
+
     setNotifications((prev) =>
       prev.map((item) => ({ ...item, read: true }))
     )
+
+    try {
+      await Promise.all(
+        unreadItems.map((item) =>
+          updateDoc(doc(db, "notifications", item.id), {
+            read: true,
+            readAt: serverTimestamp(),
+          })
+        )
+      )
+    } catch (error) {
+      console.error("Notification read status error:", error)
+    }
   }
 
-  const clearNotifications = () => {
-    setNotifications([])
+  const clearNotifications = async () => {
+    if (notifications.length === 0) return
+
+    const confirmDelete = window.confirm(
+      "Kya aap saare notifications delete karna chahte hain?"
+    )
+
+    if (!confirmDelete) return
+
+    try {
+      await Promise.all(
+        notifications.map((item) =>
+          deleteDoc(doc(db, "notifications", item.id))
+        )
+      )
+
+      setNotifications([])
+    } catch (error) {
+      console.error("Notification delete error:", error)
+      alert("Notifications delete nahi ho paye. Dobara try karein.")
+    }
   }
 
   // =========================

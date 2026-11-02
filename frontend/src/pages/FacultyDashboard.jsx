@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
+
 import {
   collection,
   getDocs,
@@ -50,6 +51,9 @@ export default function FacultyDashboard() {
   const [saving, setSaving] = useState(false);
 
   const [resultForm, setResultForm] = useState({
+    branch: "",
+    className: "9th",
+    stream: "",
     studentEmail: "",
     exam: "",
     percentage: "",
@@ -68,6 +72,9 @@ export default function FacultyDashboard() {
   const [noticeForm, setNoticeForm] = useState({
     title: "",
     message: "",
+    branch: "",
+    className: "9th",
+    stream: "",
   });
 
   useEffect(() => {
@@ -109,13 +116,56 @@ export default function FacultyDashboard() {
           return;
         }
 
+        // Branches Firestore mein array ya string dono format mein ho sakte hain.
+        // String ko direct array banane se "Itimha" ke letters alag branches ban jaate hain.
+        const rawBranches = data.branches ?? data.branch ?? [];
+
+const normalizedBranches = [
+  ...new Set(
+    (Array.isArray(rawBranches)
+      ? rawBranches
+      : typeof rawBranches === "string"
+        ? [rawBranches]
+        : []
+    )
+      .flatMap((branch) => {
+        if (typeof branch !== "string") return [];
+
+        const value = branch.trim();
+
+        // Purane galat letter-wise entries ko ignore karo
+        if (
+          value.length === 1 &&
+          /^[a-z]$/i.test(value)
+        ) {
+          return [];
+        }
+
+        return value.split(",").map((item) => item.trim());
+      })
+      .filter(Boolean)
+      .filter((branch) =>
+        ["Itimha", "Bardiha", "Nasriganj", "Rohtas"].some(
+          (validBranch) =>
+            validBranch.toLowerCase() === branch.toLowerCase()
+        )
+      )
+      .map((branch) =>
+        ["Itimha", "Bardiha", "Nasriganj", "Rohtas"].find(
+          (validBranch) =>
+            validBranch.toLowerCase() === branch.toLowerCase()
+        )
+      )
+  ),
+];
+
         const normalizedFaculty = {
-        id: facultyDoc.id,
-        name: data.name || currentUser.displayName || "Faculty",
-        email: facultyEmail,
-        branches: data.branches || [data.branch || ""],
-        subject: data.subject || "",
-        status: data.status || "active",
+          id: facultyDoc.id,
+          name: data.name || currentUser.displayName || "Faculty",
+          email: facultyEmail,
+          branches: normalizedBranches,
+          subject: data.subject || "",
+          status: data.status || "active",
         };
 
         setUser(currentUser);
@@ -367,11 +417,17 @@ if (facultyBranches.length > 0) {
     e.preventDefault();
 
     if (
+      !resultForm.branch ||
+      !resultForm.className ||
       !resultForm.studentEmail ||
-      !resultForm.exam ||
-      !resultForm.percentage
+      !resultForm.exam.trim() ||
+      resultForm.percentage === ""
     ) {
-      alert("Please fill all fields.");
+      alert("Branch, class, student, exam aur percentage select/fill karein.");
+      return;
+    }
+    if ((resultForm.className === "11th" || resultForm.className === "12th") && !resultForm.stream) {
+      alert("11th/12th ke liye stream select karein.");
       return;
     }
 
@@ -384,8 +440,10 @@ if (facultyBranches.length > 0) {
 
     const student = students.find(
       (item) =>
-        item.email?.toLowerCase() ===
-        resultForm.studentEmail.toLowerCase()
+        item.email?.toLowerCase() === resultForm.studentEmail.toLowerCase() &&
+        item.branch === resultForm.branch &&
+        item.className === resultForm.className &&
+        ((resultForm.className !== "11th" && resultForm.className !== "12th") || item.stream === resultForm.stream)
     );
 
     if (!student) {
@@ -413,10 +471,22 @@ if (facultyBranches.length > 0) {
         date: new Date().toLocaleDateString(),
         createdAt: serverTimestamp(),
       });
+      
+  await addDoc(collection(db, "notifications"), {
+    studentEmail: String(student.email || "").trim().toLowerCase(),
+    title: "New Result Published",
+    message: `Aapka ${resultForm.exam} ka result publish ho gaya hai. Percentage: ${percentage}%`,
+    type: "Result",
+    read: false,
+    createdAt: serverTimestamp(),
+  });
 
       alert("Result successfully added.");
 
       setResultForm({
+        branch: "",
+        className: "9th",
+        stream: "",
         studentEmail: "",
         exam: "",
         percentage: "",
@@ -496,8 +566,12 @@ if (facultyBranches.length > 0) {
   const handleAddNotice = async (e) => {
     e.preventDefault();
 
-    if (!noticeForm.title || !noticeForm.message) {
-      alert("Notice title aur message required hai.");
+    if (!noticeForm.title.trim() || !noticeForm.message.trim() || !noticeForm.branch || !noticeForm.className) {
+      alert("Notice title, message, branch aur class required hain.");
+      return;
+    }
+    if ((noticeForm.className === "11th" || noticeForm.className === "12th") && !noticeForm.stream) {
+      alert("11th/12th ke liye notice stream select karein.");
       return;
     }
 
@@ -505,31 +579,55 @@ if (facultyBranches.length > 0) {
       setSaving(true);
 
       const assignedBranches = facultyData?.branches || [];
-      if (assignedBranches.length === 0) {
-        throw new Error("Faculty account ke saath koi branch assign nahi hai.");
+      if (!assignedBranches.includes(noticeForm.branch)) {
+        throw new Error("Selected branch aapko assign nahi hai.");
       }
 
-      // Publish a separate notice for each branch assigned to this faculty.
-      await Promise.all(
-        assignedBranches.map((branch) =>
-          addDoc(collection(db, "notices"), {
-            title: noticeForm.title.trim(),
-            message: noticeForm.message.trim(),
-            branch,
-            facultyEmail: user?.email?.trim().toLowerCase() || "",
-            facultyName: facultyData?.name || "Faculty",
-            status: "Published",
-            date: new Date().toLocaleDateString(),
-            createdAt: serverTimestamp(),
-          })
-        )
-      );
+      await addDoc(collection(db, "notices"), {
+        title: noticeForm.title.trim(),
+        message: noticeForm.message.trim(),
+        branch: noticeForm.branch,
+        className: noticeForm.className,
+        stream: (noticeForm.className === "11th" || noticeForm.className === "12th") ? noticeForm.stream : "",
+        targetType: "class",
+        facultyEmail: user?.email?.trim().toLowerCase() || "",
+        facultyName: facultyData?.name || "Faculty",
+        status: "Published",
+        date: new Date().toLocaleDateString(),
+        createdAt: serverTimestamp(),
+      });
+
+
+  const noticeStudents = students.filter((student) =>
+    student.branch === noticeForm.branch &&
+    student.className === noticeForm.className &&
+    ((noticeForm.className !== "11th" && noticeForm.className !== "12th") ||
+      student.stream === noticeForm.stream) &&
+    student.email
+  );
+
+  await Promise.all(
+    noticeStudents.map((student) =>
+      addDoc(collection(db, "notifications"), {
+        studentEmail: String(student.email).trim().toLowerCase(),
+        title: `New Notice: ${noticeForm.title.trim()}`,
+        message: noticeForm.message.trim(),
+        type: "Notice",
+        read: false,
+        createdAt: serverTimestamp(),
+      })
+    )
+  );
+
 
       alert("Notice successfully published.");
 
       setNoticeForm({
         title: "",
         message: "",
+        branch: "",
+        className: "9th",
+        stream: "",
       });
 
       setShowNoticeForm(false);
@@ -550,6 +648,51 @@ if (facultyBranches.length > 0) {
       </div>
     );
   }
+
+  const handleDeleteNotice = async (notice) => {
+const confirmed = window.confirm(
+`"${notice.title}" notice delete karna chahte hain?`
+);
+
+
+if (!confirmed) return;
+
+try {
+  await deleteDoc(doc(db, "notices", notice.firestoreId || notice.id));
+  alert("Notice successfully deleted.");
+  await loadAllData(facultyData?.branches || []);
+} catch (error) {
+  console.error("Notice delete error:", error);
+  alert("Notice delete nahi hua. Please try again.");
+}
+
+
+};
+
+const handleDeleteMaterial = async (material) => {
+  const confirmed = window.confirm(
+    `"${material.title}" material delete karna chahte hain?`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const materialId =
+      material.firestoreId || material.id;
+
+    await deleteDoc(
+      doc(db, "studyMaterials", materialId)
+    );
+
+    alert("Study material successfully deleted.");
+  } catch (error) {
+    console.error("Study material delete error:", error);
+    alert("Material delete nahi hua. Please try again.");
+  }
+};
+
+
+
 
   return (
     <>
@@ -599,7 +742,7 @@ if (facultyBranches.length > 0) {
         .faculty-stat { display:flex; align-items:center; gap:13px; min-width:0; padding:18px; border:1px solid #e6ebf3; border-radius:15px; background:#fff; box-shadow:0 4px 14px rgba(15,23,42,.035); }
         .faculty-stat-icon { display:flex; align-items:center; justify-content:center; flex:0 0 46px; width:46px; height:46px; border-radius:13px; background:#eff6ff; font-size:22px; }
         .faculty-stat h3 { margin:0 0 5px; color:#718096; font-size:12px; font-weight:600; }
-        .faculty-stat-number { color:#172033; font-size:25px; font-weight:800; line-height:1.15; overflow-wrap:anywhere; }
+        .faculty-stat-number { flex:0 0 auto; min-width:max-content; white-space:nowrap; color:#172033; font-size:25px; font-weight:800; line-height:1.15; overflow-wrap:normal; }
         .faculty-stat-text { margin-top:4px; color:#94a3b8; font-size:11px; }
         .faculty-quick, .faculty-section { padding:21px; border:1px solid #e6ebf3; border-radius:16px; background:#fff; box-shadow:0 4px 14px rgba(15,23,42,.03); }
         .faculty-quick h2, .faculty-section-header h2 { margin:0; color:#172033; font-size:18px; }
@@ -630,7 +773,44 @@ if (facultyBranches.length > 0) {
         .faculty-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
         .faculty-badge, .faculty-status { display:inline-flex; align-items:center; width:max-content; max-width:100%; padding:5px 9px; border-radius:30px; background:#eff6ff; color:#1d4ed8; font-size:11px; font-weight:700; overflow-wrap:anywhere; }
         .faculty-material-icon { display:flex; align-items:center; justify-content:center; width:44px; height:44px; margin-bottom:13px; border-radius:12px; background:#eff6ff; font-size:22px; }
-        .faculty-open, .faculty-view-btn, .faculty-edit-btn, .faculty-delete-btn { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:34px; padding:7px 10px; border:1px solid #dbeafe; border-radius:8px; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:700; text-decoration:none; cursor:pointer; }
+        .faculty-open,
+.faculty-view-btn,
+.faculty-edit-btn,
+.faculty-delete-btn {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+gap: 5px;
+min-height: 34px;
+padding: 7px 10px;
+border: 1px solid #dbeafe;
+border-radius: 8px;
+background: #eff6ff;
+color: #1d4ed8;
+font-size: 12px;
+font-weight: 700;
+text-decoration: none;
+cursor: pointer;
+}
+
+.faculty-result-actions {
+display: flex;
+align-items: center;
+gap: 12px;
+flex-wrap: wrap;
+}
+
+.faculty-result-actions .faculty-delete-btn {
+display: inline-flex !important;
+visibility: visible !important;
+opacity: 1 !important;
+background: #dc2626;
+border-color: #dc2626;
+color: #ffffff;
+position: relative;
+z-index: 5;
+}
+
         .faculty-edit-btn { border-color:#bfdbfe; background:#eff6ff; color:#1d4ed8; }
         .faculty-delete-btn { border-color:#fecaca; background:#fff1f2; color:#be123c; }
         .faculty-view-btn { border-color:#dbeafe; background:#eff6ff; color:#1d4ed8; }
@@ -901,10 +1081,6 @@ if (facultyBranches.length > 0) {
 
                <div>
   <strong>{facultyData?.name || user?.displayName || "Faculty"}</strong>
-  <small>
-    {facultyData?.branches?.join(", ") || "Branch not assigned"} •{" "}
-    {facultyData?.subject || "Faculty"}
-  </small>
 </div>
               </div>
             </div>
@@ -1076,13 +1252,9 @@ if (facultyBranches.length > 0) {
 >
   <option value="All">All Branches</option>
 
-  {facultyData?.branches?.includes("Itimha") && (
-    <option value="Itimha">Itimha</option>
-  )}
-
-  {facultyData?.branches?.includes("Bardiha") && (
-    <option value="Bardiha">Bardiha</option>
-  )}
+  {(facultyData?.branches || []).filter(Boolean).map((branch) => (
+    <option key={branch} value={branch}>{branch}</option>
+  ))}
 </select>
               </div>
 
@@ -1212,11 +1384,37 @@ if (facultyBranches.length > 0) {
                             <div className="faculty-performance-card"><span>Fees Approved</span><strong>₹{approvedAmount}</strong><small>{approvedPayments.length} payment{approvedPayments.length !== 1 ? "s" : ""}</small></div>
                             <div className="faculty-performance-card"><span>Pending Fees</span><strong>{pendingPayments.length}</strong><small>Verification pending</small></div>
                           </div>
-                          <div className="faculty-student-results"><h3>Result History</h3>
-                            {studentResults.length === 0 ? <div className="faculty-empty">No results available for this student.</div> : studentResults.map((result) => (
-                              <div className="faculty-result-row" key={result.id}><div><strong>{result.exam || "-"}</strong><small>{result.className || "-"}{result.stream ? ` • ${result.stream}` : ""}{result.date ? ` • ${result.date}` : ""}</small></div><strong>{result.percentage}%</strong></div>
-                            ))}
-                          </div>
+                          <div className="faculty-student-results">
+  <h3>Result History</h3>
+
+{studentResults.length === 0 ? ( <div className="faculty-empty">
+No results available for this student. </div>
+) : (
+studentResults.map((result) => ( <div className="faculty-result-row" key={result.id}> <div> <strong>{result.exam || "-"}</strong> <small>
+{result.className || "-"}
+{result.stream ? ` • ${result.stream}` : ""}
+{result.date ? ` • ${result.date}` : ""} </small> </div>
+
+
+    <div className="faculty-result-actions">
+      <strong>{result.percentage}%</strong>
+
+      <button
+        type="button"
+        className="faculty-delete-btn"
+        onClick={() => handleDeleteResult(result)}
+      >
+        🗑️ Delete
+      </button>
+    </div>
+  </div>
+))
+
+
+)}
+
+</div>
+
                           <div className="faculty-student-results"><h3>Payment History</h3>
                             {studentPayments.length === 0 ? <div className="faculty-empty">No payment records available for this student.</div> : studentPayments.map((payment) => (
                               <div className="faculty-result-row" key={payment.id}><div><strong>₹{Number(payment.amount || 0)}</strong><small>UTR: {payment.utr || "-"}{payment.date ? ` • ${payment.date}` : ""}</small></div><span className={`faculty-payment-status ${payment.status === "Approved" ? "approved" : payment.status === "Rejected" ? "rejected" : "pending"}`}>{payment.status || "Pending Verification"}</span></div>
@@ -1257,29 +1455,54 @@ if (facultyBranches.length > 0) {
                 >
                   <h3>Add Student Result</h3>
 
-                  <label>Student</label>
+                  <label>Branch</label>
+                  <select
+                    className="faculty-input"
+                    value={resultForm.branch}
+                    required
+                    onChange={(e) => setResultForm({ ...resultForm, branch: e.target.value, studentEmail: "" })}
+                  >
+                    <option value="">Select Branch</option>
+                    {(facultyData?.branches || []).filter(Boolean).map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+                  </select>
 
+                  <label>Class</label>
+                  <select
+                    className="faculty-input"
+                    value={resultForm.className}
+                    required
+                    onChange={(e) => setResultForm({ ...resultForm, className: e.target.value, stream: "", studentEmail: "" })}
+                  >
+                    <option value="9th">9th</option>
+                    <option value="10th">10th</option>
+                    <option value="11th">11th</option>
+                    <option value="12th">12th</option>
+                  </select>
+
+                  {(resultForm.className === "11th" || resultForm.className === "12th") && <>
+                    <label>Stream</label>
+                    <select className="faculty-input" value={resultForm.stream} required onChange={(e) => setResultForm({ ...resultForm, stream: e.target.value, studentEmail: "" })}>
+                      <option value="">Select Stream</option>
+                      <option value="Science">Science</option>
+                      <option value="Arts">Arts</option>
+                    </select>
+                  </>}
+
+                  <label>Student</label>
                   <select
                     value={resultForm.studentEmail}
-                    onChange={(e) =>
-                      setResultForm({
-                        ...resultForm,
-                        studentEmail: e.target.value,
-                      })
-                    }
+                    required
+                    onChange={(e) => setResultForm({ ...resultForm, studentEmail: e.target.value })}
                     className="faculty-input"
                   >
-                    <option value="">
-                      Select Student
-                    </option>
-
-                    {students.map((student) => (
-                      <option
-                        key={student.id}
-                        value={student.email}
-                      >
-                        {student.name} -{" "}
-                        {student.studentId || student.email}
+                    <option value="">Select Student</option>
+                    {students.filter((student) =>
+                      student.branch === resultForm.branch &&
+                      student.className === resultForm.className &&
+                      ((resultForm.className !== "11th" && resultForm.className !== "12th") || student.stream === resultForm.stream)
+                    ).map((student) => (
+                      <option key={student.id} value={student.email}>
+                        {student.name} - {student.studentId || student.email}
                       </option>
                     ))}
                   </select>
@@ -1358,14 +1581,22 @@ if (facultyBranches.length > 0) {
                       </p>
 
                       <p>
-                        <b>Class:</b>{" "}
-                        {result.className || "-"}
-                      </p>
+  <b>Class:</b>{" "}
+  {result.className || "-"}
+</p>
 
-                      <p>
-                        <b>Branch:</b>{" "}
-                        {result.branch || "-"}
-                      </p>
+<p>
+  <b>Branch:</b>{" "}
+  {result.branch || "-"}
+</p>
+
+<button
+  type="button"
+  className="faculty-delete-btn"
+  onClick={() => handleDeleteResult(result)}
+>
+  🗑️ Delete Result
+</button>
                     </div>
                   ))
                 )}
@@ -1556,42 +1787,10 @@ if (facultyBranches.length > 0) {
                   >
                     <option value="">Select Branch</option>
 
-                    {facultyData?.branches?.includes("Itimha") && (
-                      <option value="Itimha">Itimha</option>
-                    )}
-
-                    {facultyData?.branches?.includes("Bardiha") && (
-                      <option value="Bardiha">Bardiha</option>
-                    )}
+                    {(facultyData?.branches || []).filter(Boolean).map((branch) => (
+                      <option key={branch} value={branch}>{branch}</option>
+                    ))}
                   </select>
-
-                  {(materialForm.className === "11th" ||
-  materialForm.className === "12th") && (
-  <>
-    <label>Stream</label>
-
-    <select
-      value={materialForm.stream}
-      onChange={(e) =>
-        setMaterialForm({
-          ...materialForm,
-          stream: e.target.value,
-        })
-      }
-      className="faculty-input"
-    >
-      <option value="">
-        Select Stream
-      </option>
-      <option value="Science">
-        Science
-      </option>
-      <option value="Arts">
-        Arts
-      </option>
-    </select>
-  </>
-)}
 
                   <label>Description</label>
 
@@ -1672,15 +1871,23 @@ if (facultyBranches.length > 0) {
                       </p>
 
                       {material.materialUrl && (
-                        <a
-                          href={material.materialUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="faculty-open"
-                        >
-                          📄 Open Material
-                        </a>
-                      )}
+  <a
+    href={material.materialUrl}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="faculty-open"
+  >
+    📄 Open Material
+  </a>
+)}
+
+<button
+  type="button"
+  className="faculty-delete-btn"
+  onClick={() => handleDeleteMaterial(material)}
+>
+  🗑️ Delete Material
+</button>
                     </div>
                   ))
                 )}
@@ -2002,6 +2209,29 @@ if (facultyBranches.length > 0) {
                 >
                   <h3>Publish New Notice</h3>
 
+                  <label>Target Branch</label>
+                  <select className="faculty-input" value={noticeForm.branch} required onChange={(e) => setNoticeForm({ ...noticeForm, branch: e.target.value })}>
+                    <option value="">Select Branch</option>
+                    {(facultyData?.branches || []).filter(Boolean).map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+                  </select>
+
+                  <label>Target Class</label>
+                  <select className="faculty-input" value={noticeForm.className} required onChange={(e) => setNoticeForm({ ...noticeForm, className: e.target.value, stream: "" })}>
+                    <option value="9th">9th</option>
+                    <option value="10th">10th</option>
+                    <option value="11th">11th</option>
+                    <option value="12th">12th</option>
+                  </select>
+
+                  {(noticeForm.className === "11th" || noticeForm.className === "12th") && <>
+                    <label>Target Stream</label>
+                    <select className="faculty-input" value={noticeForm.stream} required onChange={(e) => setNoticeForm({ ...noticeForm, stream: e.target.value })}>
+                      <option value="">Select Stream</option>
+                      <option value="Science">Science</option>
+                      <option value="Arts">Arts</option>
+                    </select>
+                  </>}
+
                   <label>Notice Title</label>
 
                   <input
@@ -2066,11 +2296,19 @@ if (facultyBranches.length > 0) {
                           </span>
                         </div>
 
+                        <button
+  type="button"
+  onClick={() => handleDeleteNotice(notice)}
+  className="faculty-delete-btn"
+>
+  🗑️ Delete
+</button>
+
                         <p>{notice.message}</p>
 
                         <small>
-                          {notice.date ||
-                            "Date not available"}
+                          Branch: {notice.branch || "All"} · Class: {notice.className || "All"}
+                          {notice.stream ? ` · Stream: ${notice.stream}` : ""} · {notice.date || "Date not available"}
                         </small>
                       </div>
                     </div>
