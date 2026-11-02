@@ -504,64 +504,119 @@ if (facultyBranches.length > 0) {
   };
 
   const handleAddMaterial = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (
-      !materialForm.title ||
-      !materialForm.subject ||
-      !materialForm.materialUrl
-    ) {
-      alert("Title, Subject aur PDF URL required hai.");
-      return;
-    }
+  if (
+    !materialForm.title ||
+    !materialForm.subject ||
+    !materialForm.materialUrl
+  ) {
+    alert("Title, Subject aur PDF URL required hai.");
+    return;
+  }
 
-    if (
-      !materialForm.materialUrl.startsWith("http://") &&
-      !materialForm.materialUrl.startsWith("https://")
-    ) {
-      alert("Valid PDF/Google Drive URL dijiye.");
-      return;
-    }
+  if (
+    !materialForm.materialUrl.startsWith("http://") &&
+    !materialForm.materialUrl.startsWith("https://")
+  ) {
+    alert("Valid PDF/Google Drive URL dijiye.");
+    return;
+  }
 
-    try {
-      setSaving(true);
+  try {
+    setSaving(true);
 
-      await addDoc(collection(db, "studyMaterials"), {
-        title: materialForm.title,
-        subject: materialForm.subject,
-        className: materialForm.className,
-        stream: materialForm.stream,
-        description: materialForm.description,
-        materialUrl: materialForm.materialUrl,
-        branch: materialForm.branch || "",
-        facultyEmail: user?.email?.trim().toLowerCase() || "",
-        facultyName: facultyData?.name || "Faculty",
-        status: "Published",
-        createdAt: serverTimestamp(),
-      });
+    const materialData = {
+      title: materialForm.title.trim(),
+      subject: materialForm.subject.trim(),
+      className: materialForm.className,
+      stream: materialForm.stream || "",
+      description: materialForm.description || "",
+      materialUrl: materialForm.materialUrl.trim(),
+      branch: materialForm.branch || "",
+      facultyEmail: user?.email?.trim().toLowerCase() || "",
+      facultyName: facultyData?.name || "Faculty",
+      status: "Published",
+      createdAt: serverTimestamp(),
+    };
 
-      alert("Study material successfully added.");
+    // 1. Study material Firebase mein save karo
+    await addDoc(collection(db, "studyMaterials"), materialData);
 
-      setMaterialForm({
-        title: "",
-        subject: "",
-        className: "9th",
-        stream: "",
-        branch: "",
-        description: "",
-        materialUrl: "",
-      });
+    // 2. Material ke target students find karo
+    console.log("Total students:", students.length);
+    const targetStudents = students.filter((student) => {
+      const sameBranch =
+        String(student.branch || "").trim().toLowerCase() ===
+        String(materialData.branch).trim().toLowerCase();
 
-      setShowMaterialForm(false);
+      const sameClass =
+        String(student.className || student.class || "")
+          .trim()
+          .toLowerCase() ===
+        String(materialData.className).trim().toLowerCase();
 
-      await loadAllData(facultyData?.branches || []);
-    } catch (error) {
-      console.error(error);
-      alert("Study material save nahi hua.");
-    } finally {
-      setSaving(false);
-    }
-  };
+      const sameStream =
+        materialData.className !== "11th" &&
+        materialData.className !== "12th"
+          ? true
+          : String(student.stream || "").trim().toLowerCase() ===
+            String(materialData.stream).trim().toLowerCase();
+
+            console.log("Checking student:", student.name, {
+  studentBranch: student.branch,
+  materialBranch: materialData.branch,
+  studentClass: student.className || student.class,
+  materialClass: materialData.className,
+  studentEmail: student.email,
+});
+
+      return (
+        sameBranch &&
+        sameClass &&
+        sameStream &&
+        student.email
+      );
+    });
+
+    // 3. Har target student ke bell mein notification save karo
+    await Promise.all(
+      targetStudents.map((student) =>
+        addDoc(collection(db, "notifications"), {
+          studentEmail: String(student.email).trim().toLowerCase(),
+          title: `New Study Material: ${materialData.title}`,
+          message: `${materialData.subject} ka naya study material available hai. Faculty dashboard se PDF open karein.`,
+          type: "Study Material",
+          read: false,
+          createdAt: serverTimestamp(),
+        })
+      )
+    );
+
+    alert(
+      `Study material publish ho gaya. ${targetStudents.length} students ko notification bhej diya gaya.`
+    );
+
+    setMaterialForm({
+      title: "",
+      subject: "",
+      className: "9th",
+      stream: "",
+      branch: "",
+      description: "",
+      materialUrl: "",
+    });
+
+    setShowMaterialForm(false);
+
+    await loadAllData(facultyData?.branches || []);
+  } catch (error) {
+    console.error("Study material publish error:", error);
+    alert("Study material ya notification save nahi hua. Console check karein.");
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleAddNotice = async (e) => {
     e.preventDefault();
