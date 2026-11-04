@@ -139,134 +139,236 @@ export default function AdminPayments({ branch }) {
     return payment.date || "N/A";
   };
 
-  const downloadReceipt = (payment) => {
-    if (payment.status !== "Approved") {
-      alert("Receipt sirf Approved payment ke liye available hai.");
-      return;
-    }
 
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const margin = 18;
-    const contentWidth = pageWidth - margin * 2;
+const downloadReceipt = (payment) => {
+  if (payment.status !== "Approved") {
+    alert("Receipt sirf Approved payment ke liye available hai.");
+    return;
+  }
 
-    const receiptNo = String(payment.id || "N/A").slice(0, 24).toUpperCase();
-    const amount = Number(payment.amount || 0);
+  const pdf = new jsPDF("p", "mm", "a4");
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 16;
+  const contentWidth = pageWidth - margin * 2;
+
+  const receiptNo = String(payment.id || "N/A")
+    .slice(0, 24)
+    .toUpperCase();
+
+  const amount = Number(payment.amount || 0);
+
+  const paymentDate = getPaymentDate(payment);
+  const studentName = payment.studentName || "N/A";
+  const studentEmail = payment.studentEmail || "N/A";
+  const studentClass = payment.className || "N/A";
+  const branchName = payment.branch || "N/A";
+  const paymentMethod = payment.upiId
+    ? "UPI"
+    : payment.method || "N/A";
+  const utr = payment.utr || "N/A";
+
+  // Background
+  pdf.setFillColor(248, 250, 252);
+  pdf.rect(0, 0, pageWidth, pageHeight, "F");
+
+  // Top header
+  pdf.setFillColor(29, 78, 216);
+  pdf.rect(0, 0, pageWidth, 52, "F");
+
+  // Decorative line
+  pdf.setFillColor(239, 68, 68);
+  pdf.rect(0, 50, pageWidth, 2, "F");
+
+  // Institute branding
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(21);
+  pdf.text("J. SOLUTION CLASSES", margin, 19);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  pdf.text("OFFICIAL FEE PAYMENT RECEIPT", margin, 28);
+  pdf.setFontSize(9);
+  pdf.text("Payment Confirmation", margin, 36);
+
+  // Approved badge
+  pdf.setFillColor(220, 252, 231);
+  pdf.roundedRect(pageWidth - 51, 13, 35, 10, 3, 3, "F");
+
+  pdf.setTextColor(22, 101, 52);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(8);
+  pdf.text("APPROVED", pageWidth - 33.5, 19.5, {
+    align: "center",
+  });
+
+  // Receipt information card
+  let y = 63;
+
+  pdf.setFillColor(255, 255, 255);
+  pdf.setDrawColor(226, 232, 240);
+  pdf.roundedRect(margin, y, contentWidth, 31, 3, 3, "FD");
+
+  pdf.setTextColor(100, 116, 139);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(8);
+  pdf.text("RECEIPT NUMBER", margin + 6, y + 8);
+  pdf.text("PAYMENT DATE", margin + 6, y + 21);
+
+  pdf.setTextColor(30, 41, 59);
+  pdf.setFontSize(9);
+  pdf.text(
+    pdf.splitTextToSize(receiptNo, contentWidth - 15),
+    margin + 48,
+    y + 8
+  );
+
+  pdf.setFont("helvetica", "normal");
+  pdf.text(
+    pdf.splitTextToSize(paymentDate, contentWidth - 55),
+    margin + 48,
+    y + 21
+  );
+
+  y += 41;
+
+  // Section title helper
+  const addSectionTitle = (title) => {
+    pdf.setFillColor(239, 246, 255);
+    pdf.roundedRect(margin, y, contentWidth, 10, 2, 2, "F");
 
     pdf.setFillColor(29, 78, 216);
-    pdf.rect(0, 0, pageWidth, 48, "F");
+    pdf.rect(margin, y, 1.5, 10, "F");
 
-    pdf.setTextColor(255, 255, 255);
+    pdf.setTextColor(29, 78, 216);
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(22);
-    pdf.text("J. SOLUTION CLASSES", margin, 19);
+    pdf.setFontSize(10);
+    pdf.text(title, margin + 5, y + 6.5);
 
-    pdf.setFontSize(11);
-    pdf.text("OFFICIAL FEE PAYMENT RECEIPT", margin, 29);
+    y += 16;
+  };
+
+  // Detail row helper
+  const addRow = (label, value) => {
+    const safeValue = String(value || "N/A");
 
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
-    pdf.text("Payment Confirmation", margin, 37);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(label, margin + 3, y);
 
-    pdf.setFillColor(220, 252, 231);
-    pdf.roundedRect(pageWidth - 53, 13, 35, 10, 3, 3, "F");
-    pdf.setTextColor(22, 101, 52);
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(9);
-    pdf.text("APPROVED", pageWidth - 35.5, 19.5, { align: "center" });
+    pdf.setTextColor(30, 41, 59);
 
-    let y = 62;
-
-    const addSectionTitle = (title) => {
-      pdf.setFillColor(239, 246, 255);
-      pdf.roundedRect(margin, y, contentWidth, 10, 2, 2, "F");
-      pdf.setTextColor(29, 78, 216);
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(11);
-      pdf.text(title, margin + 4, y + 6.5);
-      y += 18;
-    };
-
-    const addRow = (label, value) => {
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9);
-      pdf.setTextColor(100, 116, 139);
-      pdf.text(label, margin + 2, y);
-
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(10);
-      pdf.setTextColor(31, 41, 55);
-
-      const valueLines = pdf.splitTextToSize(
-        String(value || "N/A"),
-        contentWidth - 55
-      );
-
-      pdf.text(valueLines, margin + 53, y);
-
-      y += Math.max(10, valueLines.length * 5 + 3);
-
-      pdf.setDrawColor(226, 232, 240);
-      pdf.line(margin, y - 4, pageWidth - margin, y - 4);
-    };
-
-    addSectionTitle("RECEIPT DETAILS");
-    addRow("Receipt Number", receiptNo);
-    addRow("Payment Date", getPaymentDate(payment));
-
-    addSectionTitle("STUDENT DETAILS");
-    addRow("Student Name", payment.studentName);
-    addRow("Email Address", payment.studentEmail);
-    addRow("Class", payment.className);
-    addRow("Branch", payment.branch);
-
-    addSectionTitle("PAYMENT DETAILS");
-    addRow("Payment Method", payment.upiId ? "UPI" : payment.method || "N/A");
-    addRow("Transaction / UTR", payment.utr || "N/A");
-    addRow("Status", "APPROVED");
-
-    y += 4;
-
-    pdf.setFillColor(240, 253, 244);
-    pdf.setDrawColor(187, 247, 208);
-    pdf.roundedRect(margin, y, contentWidth, 28, 3, 3, "FD");
-
-    pdf.setTextColor(22, 101, 52);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
-    pdf.text("TOTAL AMOUNT PAID", margin + 6, y + 10);
-
-    pdf.setFontSize(20);
-    pdf.text(`INR ${amount.toLocaleString("en-IN")}`, margin + 6, y + 21);
-
-    y += 40;
-
-    if (y > 265) {
-      pdf.addPage();
-      y = 30;
-    }
-
-    pdf.setDrawColor(203, 213, 225);
-    pdf.line(margin, y, pageWidth - margin, y);
-
-    y += 9;
-    pdf.setTextColor(71, 85, 105);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
-    pdf.text("Thank you!", pageWidth / 2, y, { align: "center" });
-
-    y += 6;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(8);
-    pdf.text(
-      "This receipt represents a payment marked as Approved in the institute system.",
-      pageWidth / 2,
-      y,
-      { align: "center", maxWidth: contentWidth }
+    const valueLines = pdf.splitTextToSize(
+      safeValue,
+      contentWidth - 62
     );
 
-    pdf.save(`J-Solution-Receipt-${receiptNo}.pdf`);
+    pdf.text(valueLines, margin + 58, y);
+
+    const rowHeight = Math.max(9, valueLines.length * 4.5 + 3);
+
+    pdf.setDrawColor(226, 232, 240);
+    pdf.line(
+      margin + 2,
+      y + rowHeight - 3,
+      pageWidth - margin - 2,
+      y + rowHeight - 3
+    );
+
+    y += rowHeight;
   };
+
+  // Student section
+  addSectionTitle("STUDENT INFORMATION");
+  addRow("Student Name", studentName);
+  addRow("Email Address", studentEmail);
+  addRow("Class", studentClass);
+  addRow("Branch", branchName);
+
+  y += 6;
+
+  // Payment section
+  addSectionTitle("PAYMENT INFORMATION");
+  addRow("Payment Method", paymentMethod);
+  addRow("Transaction / UTR", utr);
+  addRow("Payment Status", "APPROVED");
+
+  y += 8;
+
+  // Total amount card
+  pdf.setFillColor(240, 253, 244);
+  pdf.setDrawColor(187, 247, 208);
+  pdf.roundedRect(margin, y, contentWidth, 32, 3, 3, "FD");
+
+  pdf.setTextColor(22, 101, 52);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(9);
+  pdf.text("TOTAL AMOUNT PAID", margin + 7, y + 10);
+
+  pdf.setFontSize(21);
+  pdf.text(
+    `Rs. ${amount.toLocaleString("en-IN")}`,
+    margin + 7,
+    y + 23
+  );
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(8);
+  pdf.text(
+    "Payment successfully verified",
+    pageWidth - margin - 7,
+    y + 20,
+    { align: "right" }
+  );
+
+  y += 43;
+
+  // Footer
+  pdf.setDrawColor(203, 213, 225);
+  pdf.line(margin, y, pageWidth - margin, y);
+
+  y += 9;
+
+  pdf.setTextColor(29, 78, 216);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(11);
+  pdf.text("Thank you for your payment!", pageWidth / 2, y, {
+    align: "center",
+  });
+
+  y += 6;
+
+  pdf.setTextColor(100, 116, 139);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(8);
+  pdf.text(
+    "Please keep this receipt for your records.",
+    pageWidth / 2,
+    y,
+    { align: "center" }
+  );
+
+  y += 5;
+
+  pdf.setFontSize(7);
+  pdf.text(
+    "This receipt represents a payment marked as Approved in the institute system.",
+    pageWidth / 2,
+    y,
+    {
+      align: "center",
+      maxWidth: contentWidth,
+    }
+  );
+
+  // Download PDF
+  pdf.save(`J-Solution-Receipt-${receiptNo}.pdf`);
+};
+
 
   const printReceipt = () => {
     window.print();
