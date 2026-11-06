@@ -18,6 +18,9 @@ export default function AdminCertificates({ branch }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [classFilter, setClassFilter] = useState("All");
+const [formClass, setFormClass] = useState("All");
+const [formStream, setFormStream] = useState("All");
 
   const [form, setForm] = useState({
     studentEmail: "",
@@ -72,6 +75,33 @@ export default function AdminCertificates({ branch }) {
       setLoading(false);
     }
   };
+
+  const getStudentClass = (student) =>
+  String(
+    student.className ||
+    student.class ||
+    student.classLevel ||
+    ""
+  ).trim();
+
+const getStudentStream = (student) =>
+  String(student.stream || "").trim();
+
+const filteredStudents = students.filter((student) => {
+  const studentClass = getStudentClass(student);
+  const studentStream = getStudentStream(student);
+
+  const matchesClass =
+    formClass === "All" ||
+    studentClass === formClass;
+
+  const matchesStream =
+    formClass !== "11th" && formClass !== "12th" ||
+    formStream === "All" ||
+    studentStream === formStream;
+
+  return matchesClass && matchesStream;
+});
 
   const handleStudentChange = (email) => {
     const student = students.find(
@@ -237,6 +267,49 @@ export default function AdminCertificates({ branch }) {
         <form onSubmit={addCertificate} style={styles.form}>
           <h3 style={styles.formTitle}>Send Certificate</h3>
 
+          <label style={styles.label}>Select Class</label>
+
+<select
+  value={formClass}
+  onChange={(e) => {
+    setFormClass(e.target.value);
+    setFormStream("All");
+    setForm((prev) => ({
+      ...prev,
+      studentEmail: "",
+    }));
+  }}
+  style={styles.input}
+>
+  <option value="All">All Classes</option>
+  <option value="9th">9th Class</option>
+  <option value="10th">10th Class</option>
+  <option value="11th">11th Class</option>
+  <option value="12th">12th Class</option>
+</select>
+
+{(formClass === "11th" || formClass === "12th") && (
+  <>
+    <label style={styles.label}>Select Stream</label>
+
+    <select
+      value={formStream}
+      onChange={(e) => {
+        setFormStream(e.target.value);
+        setForm((prev) => ({
+          ...prev,
+          studentEmail: "",
+        }));
+      }}
+      style={styles.input}
+    >
+      <option value="All">All Streams</option>
+      <option value="Science">Science</option>
+      <option value="Arts">Arts</option>
+    </select>
+  </>
+)}
+
           <label style={styles.label}>Select Student</label>
 
           <select
@@ -246,7 +319,7 @@ export default function AdminCertificates({ branch }) {
           >
             <option value="">Select Student</option>
 
-            {students.map((student) => (
+            {filteredStudents.map((student) => (
               <option
                 key={student.firestoreId}
                 value={student.email}
@@ -349,13 +422,37 @@ export default function AdminCertificates({ branch }) {
         </form>
       )}
 
+      <div style={{ marginBottom: "18px" }}>
+  <label style={styles.label}>Filter Certificates by Class</label>
+
+  <select
+    value={classFilter}
+    onChange={(e) => setClassFilter(e.target.value)}
+    style={styles.input}
+  >
+    <option value="All">All Classes</option>
+    <option value="9th">9th Class</option>
+    <option value="10th">10th Class</option>
+    <option value="11th">11th Class</option>
+    <option value="12th">12th Class</option>
+  </select>
+</div>
+
       <div style={styles.list}>
         {certificates.length === 0 ? (
           <div style={styles.empty}>
             Abhi koi certificate nahi hai.
           </div>
         ) : (
-          certificates.map((item) => (
+          certificates
+  .filter((item) => {
+    if (classFilter === "All") return true;
+
+    return String(
+      item.className || item.class || item.classLevel || ""
+    ).trim() === classFilter;
+  })
+  .map((item) => (
             <div key={item.firestoreId} style={styles.card}>
               <div style={styles.cardTop}>
                 <div>

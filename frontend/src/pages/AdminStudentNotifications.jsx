@@ -9,7 +9,7 @@ import {
 } from "firebase/firestore"
 import { db } from "../firebase"
 
-export default function AdminStudentNotifications({ branch }) {
+export default function AdminStudentNotifications({ branch, onNavigate }) {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -51,19 +51,28 @@ export default function AdminStudentNotifications({ branch }) {
   }, [branch])
 
   // Mark notification as read
-  const markAsRead = async (notificationId) => {
+  const handleNotificationClick = async (item) => {
     try {
-      const notificationRef = doc(
-        db,
-        "adminNotifications",
-        notificationId
-      )
+      if (!item.read) {
+        await updateDoc(doc(db, "adminNotifications", item.id), {
+          read: true,
+          readAt: new Date(),
+        })
+      }
 
-      await updateDoc(notificationRef, {
-        read: true,
-      })
+      const details = `${item.type || ""} ${item.title || ""} ${item.message || ""}`.toLowerCase();
+      let targetPage = "Students";
+      if (details.includes("payment") || details.includes("fee")) targetPage = "Payments";
+      else if (details.includes("result")) targetPage = "Results";
+      else if (details.includes("notice")) targetPage = "Notices";
+      else if (details.includes("certificate")) targetPage = "Certificates";
+      else if (details.includes("admission")) targetPage = "Admission Enquiries";
+      else if (details.includes("location")) targetPage = "Student Locations";
+
+      if (typeof onNavigate === "function") onNavigate(targetPage, item);
     } catch (error) {
-      console.error("Notification read update error:", error)
+      console.error("Notification open error:", error);
+      alert("Notification open nahi ho paya. Dobara try karein.");
     }
   }
 
@@ -103,11 +112,7 @@ export default function AdminStudentNotifications({ branch }) {
                 ...styles.card,
                 ...(item.read ? styles.readCard : styles.unreadCard),
               }}
-              onClick={() => {
-                if (!item.read) {
-                  markAsRead(item.id)
-                }
-              }}
+              onClick={() => handleNotificationClick(item)}
             >
               <div style={styles.icon}>🔔</div>
 
@@ -146,7 +151,7 @@ export default function AdminStudentNotifications({ branch }) {
 
                 {!item.read && (
                   <div style={styles.unreadText}>
-                    ● Unread — Click to mark as read
+                    ● Unread — Click to open related page
                   </div>
                 )}
               </div>

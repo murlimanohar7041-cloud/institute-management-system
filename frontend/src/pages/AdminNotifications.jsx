@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react"
 import {
   collection,
@@ -9,6 +10,39 @@ import {
 } from "firebase/firestore"
 import { db } from "../firebase"
 
+const CLASS_OPTIONS = [
+  { value: "9th", label: "9th" },
+  { value: "10th", label: "10th" },
+  { value: "11th", label: "11th" },
+  { value: "12th", label: "12th" },
+]
+
+const STREAM_OPTIONS = [
+  { value: "Science", label: "Science" },
+  { value: "Arts", label: "Arts" },
+]
+
+function normalize(value) {
+  return String(value || "").trim().toLowerCase()
+}
+
+function getStudentClass(student) {
+  return String(
+    student.className ||
+    student.class ||
+    student.classLevel ||
+    ""
+  ).trim()
+}
+
+function getStudentStream(student) {
+  return String(student.stream || "").trim()
+}
+
+function isApproved(student) {
+  return normalize(student.status) === "approved"
+}
+
 export default function AdminNotifications({ branch }) {
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
@@ -18,6 +52,8 @@ export default function AdminNotifications({ branch }) {
 
   const [form, setForm] = useState({
     targetType: "branch",
+    targetClass: "",
+    targetStream: "",
     studentEmail: "",
     title: "",
     message: "",
@@ -31,6 +67,7 @@ export default function AdminNotifications({ branch }) {
   const loadStudents = async () => {
     try {
       setLoading(true)
+      setError("")
 
       const q = query(
         collection(db, "students"),
@@ -44,12 +81,11 @@ export default function AdminNotifications({ branch }) {
           firestoreId: item.id,
           ...item.data(),
         }))
-        .filter(
-          (student) =>
-            String(student.status || "").toLowerCase() === "approved"
-        )
+        .filter(isApproved)
         .sort((a, b) =>
-          String(a.name || "").localeCompare(String(b.name || ""))
+          String(a.name || "").localeCompare(
+            String(b.name || "")
+          )
         )
 
       setStudents(list)
@@ -63,13 +99,62 @@ export default function AdminNotifications({ branch }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target
+
     setForm((prev) => ({
       ...prev,
       [name]: value,
+
+      ...(name === "targetType"
+        ? {
+            targetClass: "",
+            targetStream: "",
+            studentEmail: "",
+          }
+        : {}),
+
+      ...(name === "targetClass"
+        ? {
+            targetStream: "",
+            studentEmail: "",
+          }
+        : {}),
+
+      ...(name === "targetStream"
+        ? {
+            studentEmail: "",
+          }
+        : {}),
     }))
+
     setSuccess("")
     setError("")
   }
+
+  const classStudents = students.filter((student) => {
+    if (!form.targetClass) return false
+
+    const studentClass = normalize(getStudentClass(student))
+
+    if (studentClass !== normalize(form.targetClass)) {
+      return false
+    }
+
+    if (
+      form.targetStream &&
+      normalize(getStudentStream(student)) !==
+        normalize(form.targetStream)
+    ) {
+      return false
+    }
+
+    return true
+  })
+
+  const selectedStudent = students.find(
+    (student) =>
+      normalize(student.email) ===
+      normalize(form.studentEmail)
+  )
 
   const handleSend = async (e) => {
     e.preventDefault()
@@ -87,20 +172,63 @@ export default function AdminNotifications({ branch }) {
       return
     }
 
-    if (form.targetType === "student" && !form.studentEmail) {
+    if (
+      form.targetType === "class" &&
+      !form.targetClass
+    ) {
+      setError("Class select kijiye.")
+      return
+    }
+
+    if (
+      form.targetType === "class" &&
+      ["11th", "12th"].includes(form.targetClass) &&
+      !form.targetStream
+    ) {
+      setError("Science ya Arts stream select kijiye.")
+      return
+    }
+
+    if (
+      form.targetType === "student" &&
+      !form.studentEmail
+    ) {
       setError("Student select kijiye.")
+      return
+    }
+
+    let targetStudents = []
+
+    if (form.targetType === "branch") {
+      targetStudents = students
+    } else if (form.targetType === "class") {
+      targetStudents = classStudents
+    } else {
+      targetStudents = selectedStudent
+        ? [selectedStudent]
+        : []
+    }
+
+    if (targetStudents.length === 0) {
+      setError(
+        "Is selection mein koi approved student nahi mila."
+      )
+      return
+    }
+
+    const studentsWithEmail = targetStudents.filter(
+      (student) => student.email
+    )
+
+    if (studentsWithEmail.length === 0) {
+      setError(
+        "Selected students ke email available nahi hain."
+      )
       return
     }
 
     try {
       setSending(true)
-
-      const selectedStudent =
-        students.find(
-          (student) =>
-            String(student.email || "").toLowerCase() ===
-            String(form.studentEmail || "").toLowerCase()
-        ) || null
 
       const notificationData = {
         title: form.title.trim(),
@@ -111,62 +239,70 @@ export default function AdminNotifications({ branch }) {
         read: false,
         createdAt: serverTimestamp(),
         date: new Date().toLocaleDateString(),
+
         targetType: form.targetType,
-        targetEmail:
-          form.targetType === "student" ? form.studentEmail : null,
+
+        targetClass:
+          form.targetType === "class"
+            ? form.targetClass
+            : null,
+
+        targetStream:
+          form.targetType === "class"
+            ? form.targetStream || null
+            : null,
       }
 
-      if (form.targetType === "student" && selectedStudent) {
-        notificationData.studentId = selectedStudent.studentId || ""
-        notificationData.studentName = selectedStudent.name || ""
-      }
+      await Promise.all(
+        studentsWithEmail.map((student) =>
+          addDoc(collection(db, "notifications"), {
+            ...notificationData,
 
-      if (form.targetType === "student") {
-        await addDoc(collection(db, "notifications"), {
-          ...notificationData,
-          studentEmail: String(form.studentEmail).toLowerCase(),
-          targetEmail: null,
-        })
+            studentEmail: normalize(student.email),
+
+            studentId: student.studentId || "",
+            studentFirestoreId: student.firestoreId || "",
+            studentName: student.name || "",
+
+            className: getStudentClass(student),
+            stream: getStudentStream(student),
+          })
+        )
+      )
+
+      let recipientDescription = ""
+
+      if (form.targetType === "branch") {
+        recipientDescription = `${branch} branch ke sabhi classes ke students`
+      } else if (form.targetType === "class") {
+        recipientDescription =
+          `${branch} branch, ${form.targetClass}` +
+          (form.targetStream
+            ? ` ${form.targetStream}`
+            : "") +
+          ` ke students`
       } else {
-        const targetStudents = students.filter(
-          (student) => student.email
-        )
-
-        await Promise.all(
-          targetStudents.map((student) =>
-            addDoc(collection(db, "notifications"), {
-              ...notificationData,
-              studentEmail: String(student.email).toLowerCase(),
-              studentId: student.studentId || "",
-              studentFirestoreId: student.firestoreId || "",
-              studentName: student.name || "",
-              className: student.className || "",
-              stream: student.stream || "",
-              targetEmail: null,
-            })
-          )
-        )
+        recipientDescription =
+          selectedStudent?.name || "selected student"
       }
 
       setSuccess(
-        form.targetType === "branch"
-          ? `Notification ${branch} ke approved students ko bhej diya gaya.`
-          : `Notification ${selectedStudent?.name || "student"} ko bhej diya gaya.`
+        `Notification ${studentsWithEmail.length} students ko bhej diya gaya. (${recipientDescription})`
       )
 
-      setForm({
-        targetType: form.targetType,
+      setForm((prev) => ({
+        ...prev,
         studentEmail: "",
         title: "",
         message: "",
         type: "General",
-      })
+      }))
     } catch (err) {
       console.error("Send Notification Error:", err)
 
       setError(
         err.code === "permission-denied"
-          ? "Permission denied. Firestore Rules me notifications read/write allow karein."
+          ? "Permission denied. Firestore Rules mein notifications write permission check karein."
           : "Notification send nahi ho paya."
       )
     } finally {
@@ -178,18 +314,25 @@ export default function AdminNotifications({ branch }) {
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <h2 style={styles.heading}>🔔 Send Notification</h2>
+          <h2 style={styles.heading}>
+            🔔 Send Notification
+          </h2>
+
           <p style={styles.subheading}>
-            Students ko important messages directly bhejiye.
+            Students ko class-wise ya individually message bhejiye.
           </p>
         </div>
 
-        <div style={styles.branchBadge}>{branch}</div>
+        <div style={styles.branchBadge}>
+          🏫 {branch}
+        </div>
       </div>
 
       <div style={styles.card}>
         <form onSubmit={handleSend}>
-          <label style={styles.label}>Send To</label>
+          <label style={styles.label}>
+            Send To
+          </label>
 
           <div style={styles.radioRow}>
             <label style={styles.radioBox}>
@@ -200,7 +343,20 @@ export default function AdminNotifications({ branch }) {
                 checked={form.targetType === "branch"}
                 onChange={handleChange}
               />
-              <span>👥 All Students of {branch}</span>
+
+              <span>👥 All Classes</span>
+            </label>
+
+            <label style={styles.radioBox}>
+              <input
+                type="radio"
+                name="targetType"
+                value="class"
+                checked={form.targetType === "class"}
+                onChange={handleChange}
+              />
+
+              <span>📚 Specific Class</span>
             </label>
 
             <label style={styles.radioBox}>
@@ -211,36 +367,121 @@ export default function AdminNotifications({ branch }) {
                 checked={form.targetType === "student"}
                 onChange={handleChange}
               />
+
               <span>👤 Specific Student</span>
             </label>
           </div>
 
+          {form.targetType === "class" && (
+            <>
+              <label style={styles.label}>
+                Select Class
+              </label>
+
+              <select
+                name="targetClass"
+                value={form.targetClass}
+                onChange={handleChange}
+                style={styles.input}
+                required
+              >
+                <option value="">
+                  -- Select Class --
+                </option>
+
+                {CLASS_OPTIONS.map((item) => (
+                  <option
+                    key={item.value}
+                    value={item.value}
+                  >
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+
+              {["11th", "12th"].includes(
+                form.targetClass
+              ) && (
+                <>
+                  <label style={styles.label}>
+                    Select Stream
+                  </label>
+
+                  <select
+                    name="targetStream"
+                    value={form.targetStream}
+                    onChange={handleChange}
+                    style={styles.input}
+                    required
+                  >
+                    <option value="">
+                      -- Select Stream --
+                    </option>
+
+                    {STREAM_OPTIONS.map((item) => (
+                      <option
+                        key={item.value}
+                        value={item.value}
+                      >
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              <div style={styles.studentCount}>
+                👨‍🎓 Matching students:{" "}
+                {classStudents.length}
+              </div>
+            </>
+          )}
+
           {form.targetType === "student" && (
             <>
-              <label style={styles.label}>Select Student</label>
+              <label style={styles.label}>
+                Select Student
+              </label>
 
               <select
                 name="studentEmail"
                 value={form.studentEmail}
                 onChange={handleChange}
                 style={styles.input}
+                required
               >
-                <option value="">-- Select Student --</option>
+                <option value="">
+                  -- Select Student --
+                </option>
 
-                {students.map((student) => (
-                  <option key={student.firestoreId} value={student.email}>
-                    {student.name} — {student.studentId} — {student.email}
-                  </option>
-                ))}
+                {students
+                  .filter((student) => student.email)
+                  .map((student) => (
+                    <option
+                      key={student.firestoreId}
+                      value={student.email}
+                    >
+                      {student.name} —{" "}
+                      {getStudentClass(student)}{" "}
+                      {getStudentStream(student)
+                        ? `(${getStudentStream(student)})`
+                        : ""}{" "}
+                      — {student.studentId}
+                    </option>
+                  ))}
               </select>
-
-              {loading && (
-                <p style={styles.smallText}>Students load ho rahe hain...</p>
-              )}
             </>
           )}
 
-          <label style={styles.label}>Notification Type</label>
+          {loading && (
+            <p style={styles.smallText}>
+              Students load ho rahe hain...
+            </p>
+          )}
+
+          <label style={styles.label}>
+            Notification Type
+          </label>
 
           <select
             name="type"
@@ -252,12 +493,16 @@ export default function AdminNotifications({ branch }) {
             <option value="Important">Important</option>
             <option value="Notice">Notice</option>
             <option value="Result">Result</option>
-            <option value="Study Material">Study Material</option>
+            <option value="Study Material">
+              Study Material
+            </option>
             <option value="Fees">Fees</option>
             <option value="Certificate">Certificate</option>
           </select>
 
-          <label style={styles.label}>Title</label>
+          <label style={styles.label}>
+            Title
+          </label>
 
           <input
             name="title"
@@ -265,9 +510,12 @@ export default function AdminNotifications({ branch }) {
             onChange={handleChange}
             placeholder="Example: Important Notice"
             style={styles.input}
+            maxLength={150}
           />
 
-          <label style={styles.label}>Message</label>
+          <label style={styles.label}>
+            Message
+          </label>
 
           <textarea
             name="message"
@@ -276,30 +524,46 @@ export default function AdminNotifications({ branch }) {
             placeholder="Message yahan likhiye..."
             rows="6"
             style={styles.textarea}
+            maxLength={5000}
           />
 
-          {error && <div style={styles.error}>{error}</div>}
-          {success && <div style={styles.success}>{success}</div>}
+          {error && (
+            <div style={styles.error}>
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div style={styles.success}>
+              {success}
+            </div>
+          )}
 
           <button
             type="submit"
-            disabled={sending}
+            disabled={sending || loading}
             style={{
               ...styles.button,
-              opacity: sending ? 0.7 : 1,
+              opacity:
+                sending || loading ? 0.7 : 1,
             }}
           >
-            {sending ? "Sending..." : "🔔 Send Notification"}
+            {sending
+              ? "Sending..."
+              : "🔔 Send Notification"}
           </button>
         </form>
       </div>
 
       <div style={styles.infoCard}>
         <strong>How it works</strong>
+
         <p>
-          Admin notification ke saath-saath Student Dashboard Results,
-          Notices, Study Materials, Certificates aur Payments me koi naya
-          update hone par bhi student ko notification mil sakta hai.
+          Notification current branch ke approved students ko
+          bheja jayega. Specific Class select karne par class
+          aur stream match karne wale students ko hi message
+          milega. Specific Student select karne par message
+          sirf us student ko bheja jayega.
         </p>
       </div>
     </div>
@@ -364,7 +628,8 @@ const styles = {
 
   radioRow: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(200px, 1fr))",
     gap: "10px",
   },
 
@@ -402,6 +667,16 @@ const styles = {
     fontFamily: "inherit",
   },
 
+  studentCount: {
+    marginTop: "10px",
+    padding: "10px 12px",
+    borderRadius: "9px",
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    fontSize: "13px",
+    fontWeight: "800",
+  },
+
   smallText: {
     margin: "6px 0 0",
     color: "#6b7280",
@@ -426,6 +701,7 @@ const styles = {
     color: "#166534",
     border: "1px solid #bbf7d0",
     fontSize: "13px",
+    lineHeight: "1.6",
   },
 
   button: {

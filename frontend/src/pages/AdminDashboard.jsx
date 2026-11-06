@@ -27,6 +27,7 @@ import { auth, db } from "../firebase"
 
 export default function AdminDashboard() {
   const [activePage, setActivePage] = useState("Dashboard")
+  const [notificationTarget, setNotificationTarget] = useState(null)
   const [branch, setBranch] = useState("Itimha")
   const [newEnquiries, setNewEnquiries] = useState(0)
   const [studentNotificationCount, setStudentNotificationCount] =
@@ -374,6 +375,10 @@ notificationTimer.current = setTimeout(() => {
       return (
         <AdminStudentNotifications
           branch={branch}
+          onNavigate={(page, notification) => {
+            setNotificationTarget(notification || null);
+            setActivePage(page);
+          }}
         />
       )
     }

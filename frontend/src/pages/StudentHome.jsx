@@ -999,8 +999,7 @@ const submitPayment = async () => {
               read: Boolean(data.read),
             };
           })
-          .sort((a, b) => b.createdAt - a.createdAt)
-          .slice(0, 50);
+          .sort((a, b) => b.createdAt - a.createdAt);
 
         setNotifications(list);
 
@@ -1063,32 +1062,6 @@ const submitPayment = async () => {
   const openNotifications = async () => {
     setShowNotifications(true);
 
-    const unreadItems = notifications.filter(
-      (item) => !item.read
-    );
-
-    setNotifications((prev) =>
-      prev.map((item) => ({
-        ...item,
-        read: true,
-      }))
-    );
-
-    try {
-      await Promise.all(
-        unreadItems.map((item) =>
-          updateDoc(doc(db, "notifications", item.id), {
-            read: true,
-            readAt: serverTimestamp(),
-          })
-        )
-      );
-    } catch (error) {
-      console.error(
-        "Notification read status error:",
-        error
-      );
-    }
   };
 
 
@@ -1130,6 +1103,48 @@ const submitPayment = async () => {
     (item) => !item.read
   ).length;
 
+  const handleNotificationClick = async (item) => {
+    try {
+      // Sirf wahi notification read hogi jis par user ne click kiya.
+      if (!item.read) {
+        await updateDoc(doc(db, "notifications", item.id), {
+          read: true,
+          readAt: serverTimestamp(),
+        });
+        setNotifications((prev) =>
+          prev.map((notification) =>
+            notification.id === item.id
+              ? { ...notification, read: true }
+              : notification
+          )
+        );
+      }
+
+      setShowNotifications(false);
+      const details = `${item.type || ""} ${item.title || ""} ${item.message || ""}`.toLowerCase();
+
+      if (details.includes("result")) {
+        await loadResults();
+      } else if (details.includes("notice")) {
+        await loadNotices();
+      } else if (details.includes("study") || details.includes("material")) {
+        await loadStudyMaterials();
+      } else if (details.includes("certificate")) {
+        await loadCertificates();
+      } else if (details.includes("fee") || details.includes("payment")) {
+        setShowFees(true);
+      } else if (details.includes("location")) {
+        setLocationError("");
+        document.getElementById("student-location-section")?.scrollIntoView({ behavior: "smooth" });
+      } else {
+        // General notification opens the notification inbox context, not an empty popup.
+        alert(`${item.title || "Notification"}\\n\\n${item.message || "No additional details."}`);
+      }
+    } catch (error) {
+      console.error("Notification open error:", error);
+      alert("Notification open nahi ho paya. Dobara try karein.");
+    }
+  };
 
 
   // =========================
@@ -2200,7 +2215,24 @@ const submitPayment = async () => {
             ) : (
               <div style={styles.notificationList}>
                 {notifications.map((item) => (
-                  <div key={item.id} style={styles.notificationItem}>
+                  <div
+  key={item.id}
+  style={{
+    ...styles.notificationItem,
+    cursor: "pointer",
+    background: item.read ? "#ffffff" : "#eef6ff",
+    borderLeft: item.read ? "3px solid #e5e7eb" : "3px solid #2563eb",
+  }}
+  onClick={() => handleNotificationClick(item)}
+  role="button"
+  tabIndex={0}
+  onKeyDown={(event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleNotificationClick(item);
+    }
+  }}
+>
                     <div style={styles.notificationItemIcon}>
                       {item.icon}
                     </div>

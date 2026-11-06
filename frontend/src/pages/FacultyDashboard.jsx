@@ -342,6 +342,35 @@ if (facultyBranches.length > 0) {
     }
   };
 
+  const handleFacultyNotificationClick = async (notification) => {
+    try {
+      if (!notification?.read && notification?.id) {
+        await updateDoc(doc(db, "facultyNotifications", notification.id), {
+          read: true,
+          readAt: serverTimestamp(),
+        });
+        setNotifications((prev) =>
+          prev.map((item) =>
+            item.id === notification.id ? { ...item, read: true } : item
+          )
+        );
+      }
+
+      const details = `${notification?.type || ""} ${notification?.title || ""} ${notification?.message || ""}`.toLowerCase();
+      if (details.includes("student") || details.includes("admission")) setActivePage("Students");
+      else if (details.includes("result")) setActivePage("Results");
+      else if (details.includes("material") || details.includes("study")) setActivePage("Study Materials");
+      else if (details.includes("notice")) setActivePage("Notices");
+      else if (details.includes("payment") || details.includes("fee")) setActivePage("Payments");
+      else setActivePage("Notifications");
+
+      setShowMobileMenu(false);
+    } catch (error) {
+      console.error("Faculty notification open error:", error);
+      alert("Notification open nahi ho paya. Dobara try karein.");
+    }
+  };
+
   const deleteNotification = async (notification) => {
     if (!notification?.id) return;
     try {
@@ -2197,7 +2226,7 @@ studentResults.map((result) => ( <div className="faculty-result-row" key={result
                     <div
                       key={notification.id}
                       className={`faculty-notification-card ${notification.read ? "read" : "unread"}`}
-                      onClick={() => markNotificationRead(notification)}
+                      onClick={() => handleFacultyNotificationClick(notification)}
                     >
                       <div className="faculty-notification-icon">
                         {notification.type === "payment" ? "💰" :

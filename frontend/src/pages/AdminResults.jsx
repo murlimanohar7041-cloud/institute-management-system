@@ -19,6 +19,8 @@ function AdminResults({ branch }) {
   const [students, setStudents] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [search, setSearch] = useState("")
+  const [classFilter, setClassFilter] = useState("All")
+  
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -327,23 +329,35 @@ function AdminResults({ branch }) {
     }
   }
 
-  const filteredResults = results.filter(
-    (item) => {
-      const text = `
-        ${item.studentName || ""}
-        ${item.studentEmail || ""}
-        ${item.studentId || ""}
-        ${item.exam || ""}
-        ${item.resultId || ""}
-        ${item.className || ""}
-        ${item.stream || ""}
-      `
+const filteredResults = results.filter((item) => {
+  const text = `
+    ${item.studentName || ""}
+    ${item.studentEmail || ""}
+    ${item.studentId || ""}
+    ${item.exam || ""}
+    ${item.resultId || ""}
+    ${item.className || ""}
+    ${item.stream || ""}
+  `
 
-      return text
-        .toLowerCase()
-        .includes(search.toLowerCase())
-    }
-  )
+  const matchesSearch = text
+    .toLowerCase()
+    .includes(search.toLowerCase())
+
+  const matchesClass =
+    classFilter === "All" ||
+    (
+      String(item.className || "").trim() ===
+        classFilter.split(" ")[0] &&
+      (
+        !classFilter.includes(" ") ||
+        String(item.stream || "").trim() ===
+          classFilter.split(" ")[1]
+      )
+    )
+
+  return matchesSearch && matchesClass
+})
 
   return (
     <div className="min-h-screen bg-gray-50 p-5 sm:p-7 lg:p-8">
@@ -598,6 +612,20 @@ function AdminResults({ branch }) {
           placeholder="Search student, Gmail, result ID, exam..."
           className="w-full max-w-md rounded-xl border px-4 py-3"
         />
+
+        <select
+  value={classFilter}
+  onChange={(e) => setClassFilter(e.target.value)}
+  className="mt-3 w-full max-w-md rounded-xl border px-4 py-3"
+>
+  <option value="All">All Classes</option>
+  <option value="9th">9th Class</option>
+  <option value="10th">10th Class</option>
+  <option value="11th Science">11th Science</option>
+  <option value="11th Arts">11th Arts</option>
+  <option value="12th Science">12th Science</option>
+  <option value="12th Arts">12th Arts</option>
+</select>
 
       </div>
 
